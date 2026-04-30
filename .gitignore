@@ -1,2 +1,4 @@
 .gradle/
 /build/
+/creds.md
+/.mcp.json
