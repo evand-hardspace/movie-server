@@ -75,5 +75,5 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| C17 | `[!]` | Write `Dockerfile` — fat JAR build + `eclipse-temurin:21-jre` runtime | Blocked on C1–C16 |
-| C18 | `[!]` | Write `.github/workflows/deploy.yml` — build → push → Cloud Run deploy | Blocked on U7, U8, C17 |
+| C17 | `[x]` | Write `Dockerfile` — fat JAR build + `eclipse-temurin:21-jre` runtime | Done |
+| C18 | `[x]` | Write `.github/workflows/deploy.yml` — build → push → Cloud Run deploy | `workflow_dispatch` only |
