@@ -25,6 +25,7 @@ dependencies {
     implementation(ktorLibs.server.cors)
     implementation(ktorLibs.server.di)
     implementation(ktorLibs.server.netty)
+    implementation(ktorLibs.server.swagger)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
     implementation(libs.exposed.kotlin.datetime)

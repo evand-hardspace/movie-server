@@ -8,6 +8,7 @@ import com.evandhardspace.movie.server.routes.favoriteRoutes
 import com.evandhardspace.movie.server.routes.movieRoutes
 import io.ktor.server.application.*
 import io.ktor.server.plugins.di.*
+import io.ktor.server.plugins.swagger.*
 import io.ktor.server.routing.*
 
 fun Application.configureRouting() {
@@ -15,6 +16,7 @@ fun Application.configureRouting() {
     val movieService: MovieService by dependencies
     val favoriteService: FavoriteService by dependencies
     routing {
+        swaggerUI(path = "swagger", swaggerFile = "openapi/documentation.yaml")
         authRoutes(userService)
         movieRoutes(movieService, userService, favoriteService)
         favoriteRoutes(favoriteService)

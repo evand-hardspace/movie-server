@@ -66,3 +66,47 @@ jobs:
             --allow-unauthenticated \
             --port 8080 \
             --project="${{ secrets.GCP_PROJECT_ID }}"
+
+  deploy-docs:
+    name: Deploy API Docs
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build docs site
+        run: |
+          mkdir -p _site/openapi
+          cp src/main/resources/openapi/documentation.yaml _site/openapi/documentation.yaml
+          cat > _site/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Movie Server API</title>
+              <meta charset="utf-8"/>
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>body { margin: 0; padding: 0; }</style>
+            </head>
+            <body>
+              <redoc spec-url='openapi/documentation.yaml'></redoc>
+              <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"></script>
+            </body>
+          </html>
+          EOF
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site/
+
+      - uses: actions/deploy-pages@v4
+        id: deployment

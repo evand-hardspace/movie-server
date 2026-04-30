@@ -1,0 +1,339 @@
+openapi: "3.1.0"
+info:
+  title: Movie Server API
+  version: "1.0.0"
+  description: |
+    Ktor backend for managing a movie catalogue.
+
+    **Authentication:** All write operations and personalized responses (favorites) require a Supabase JWT.
+    Obtain a token via Supabase Auth (email/password), then pass it as `Authorization: Bearer <token>`.
+
+    **Admin access:** `POST /movies` and `PUT /movies/{id}` require the user to have `is_admin = true`
+    in the `users` table (set manually via the Supabase dashboard).
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+tags:
+  - name: Auth
+    description: User synchronization
+  - name: Movies
+    description: Movie catalogue — read operations are public, writes require admin
+  - name: Favorites
+    description: Per-user movie favorites (requires authentication)
+
+security: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase JWT — obtain via `supabase.auth.signInWithPassword()`
+
+  schemas:
+    Genre:
+      type: string
+      enum:
+        - ACTION
+        - COMEDY
+        - DRAMA
+        - HORROR
+        - THRILLER
+        - ROMANCE
+        - SCI_FI
+        - DOCUMENTARY
+        - ANIMATION
+
+    Movie:
+      type: object
+      required: [id, title, genre, created_at, is_favorited]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        title:
+          type: string
+          example: "Inception"
+        description:
+          type: string
+          nullable: true
+          example: "A mind-bending thriller"
+        genre:
+          $ref: '#/components/schemas/Genre'
+        rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+          nullable: true
+          example: 8.8
+        photo_url:
+          type: string
+          nullable: true
+          example: "https://<project>.supabase.co/storage/v1/object/public/movies/inception.jpg"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-04-30T10:00:00Z"
+        is_favorited:
+          type: boolean
+          default: false
+          description: Present and accurate only when request is authenticated.
+
+    MovieRequest:
+      type: object
+      required: [title, genre]
+      properties:
+        title:
+          type: string
+          example: "Inception"
+        description:
+          type: string
+          nullable: true
+          example: "A mind-bending thriller"
+        genre:
+          $ref: '#/components/schemas/Genre'
+        rating:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 10
+          nullable: true
+          example: 8.8
+        photo_url:
+          type: string
+          nullable: true
+          example: "https://<project>.supabase.co/storage/v1/object/public/movies/inception.jpg"
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: "Token is not valid or has expired"
+
+paths:
+  /auth/sync:
+    post:
+      summary: Sync authenticated user
+      description: |
+        Upserts the calling user's record into the `users` table using claims from the JWT.
+        Call this once after sign-in to ensure the user exists before making other authenticated requests.
+      operationId: syncUser
+      tags: [Auth]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: User record created or updated successfully.
+        '401':
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /movies:
+    get:
+      summary: List movies
+      description: |
+        Returns all movies, optionally filtered by genre.
+        If a valid JWT is provided, each movie includes `is_favorited` reflecting the caller's status.
+      operationId: listMovies
+      tags: [Movies]
+      security:
+        - {}
+        - BearerAuth: []
+      parameters:
+        - name: genre
+          in: query
+          required: false
+          description: Filter by genre (case-sensitive enum value).
+          schema:
+            $ref: '#/components/schemas/Genre'
+      responses:
+        '200':
+          description: List of movies.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Movie'
+        '400':
+          description: Invalid genre value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    post:
+      summary: Create movie
+      description: Creates a new movie entry. Requires a valid JWT and admin privileges.
+      operationId: createMovie
+      tags: [Movies]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MovieRequest'
+      responses:
+        '201':
+          description: Movie created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Movie'
+        '401':
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated user does not have admin privileges.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /movies/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Movie UUID.
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get movie by ID
+      description: |
+        Returns a single movie.
+        If a valid JWT is provided, includes `is_favorited` for the caller.
+      operationId: getMovieById
+      tags: [Movies]
+      security:
+        - {}
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Movie found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Movie'
+        '400':
+          description: ID is not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Movie not found.
+
+    put:
+      summary: Update movie
+      description: Replaces all editable fields of a movie. Requires admin privileges.
+      operationId: updateMovie
+      tags: [Movies]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MovieRequest'
+      responses:
+        '200':
+          description: Movie updated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Movie'
+        '400':
+          description: ID is not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Authenticated user does not have admin privileges.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Movie not found.
+
+  /movies/{id}/favorite:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Movie UUID.
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      summary: Add to favorites
+      description: Marks the movie as favorited for the authenticated user. Idempotent — safe to call if already favorited.
+      operationId: addFavorite
+      tags: [Favorites]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Movie is now in the user's favorites.
+        '400':
+          description: ID is not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Remove from favorites
+      description: Removes the movie from the authenticated user's favorites. No-op if not previously favorited.
+      operationId: removeFavorite
+      tags: [Favorites]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Movie removed from the user's favorites.
+        '400':
+          description: ID is not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
