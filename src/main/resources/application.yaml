@@ -3,9 +3,13 @@ ktor:
     port: 8080
   application:
     modules:
-      - com.evandhardspace.movie.server.HttpKt.configureHttp
-      - com.evandhardspace.movie.server.SerializationKt.configureSerialization
-      - com.evandhardspace.movie.server.SecurityKt.configureSecurity
-      - com.evandhardspace.movie.server.DIKt.configureDependencyInjection
-      - com.evandhardspace.movie.server.ExposedKt.configureExposed
+      - com.evandhardspace.movie.server.plugins.HttpKt.configureHttp
+      - com.evandhardspace.movie.server.plugins.SerializationKt.configureSerialization
+      - com.evandhardspace.movie.server.plugins.SecurityKt.configureSecurity
+      - com.evandhardspace.movie.server.plugins.DIKt.configureDependencyInjection
       - com.evandhardspace.movie.server.RoutingKt.configureRouting
+
+jwt:
+  issuer: ${SUPABASE_JWT_ISSUER}
+  audience: "authenticated"
+  jwksUri: ${SUPABASE_JWKS_URI}

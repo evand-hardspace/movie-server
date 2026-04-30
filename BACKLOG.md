@@ -36,14 +36,14 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked
 |---|--------|------|-------|
 | C1 | `[x]` | Swap H2/R2DBC → PostgreSQL JDBC in `libs.versions.toml` | Add `postgresql = "42.7.4"` |
 | C2 | `[x]` | Update `build.gradle.kts` — remove R2DBC/H2, add `exposed-jdbc` + `postgresql` | |
-| C3 | `[ ]` | Update `application.yaml` — add `jwt` config block, fix module paths to `plugins.*` | |
+| C3 | `[x]` | Update `application.yaml` — add `jwt` config block, fix module paths to `plugins.*` | |
 
 ### Phase 2 — Restructure & Scaffold
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
 | C4 | `[x]` | Delete scaffold files: `GreetingService.kt`, `UsersService.kt`, `Exposed.kt` | Done as part of C2 |
-| C5 | `[ ]` | Create `plugins/` package, move `Http.kt`, `Serialization.kt`, `Security.kt`, `DI.kt` | Update module refs in `application.yaml` |
+| C5 | `[x]` | Create `plugins/` package, move `Http.kt`, `Serialization.kt`, `Security.kt`, `DI.kt` | Update module refs in `application.yaml` |
 | C6 | `[ ]` | Create domain models: `Genre.kt` (enum), `Movie.kt`, `User.kt` | Under `domain/model/` |
 | C7 | `[ ]` | Create Exposed tables: `MoviesTable.kt`, `UsersTable.kt` | Under `domain/table/` |
 
