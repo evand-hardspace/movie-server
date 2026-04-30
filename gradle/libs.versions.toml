@@ -3,6 +3,7 @@ exposed = "1.2.0"
 kotlin = "2.3.20"
 kotlinx-datetime = "0.6.1"
 logback = "1.5.21"
+mockk = "1.13.17"
 postgresql = "42.7.4"
 
 [libraries]
@@ -11,6 +12,7 @@ exposed-jdbc = { module = "org.jetbrains.exposed:exposed-jdbc", version.ref = "e
 exposed-kotlin-datetime = { module = "org.jetbrains.exposed:exposed-kotlin-datetime", version.ref = "exposed" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 
 [plugins]
