@@ -1,5 +1,14 @@
 # Movie Server — CLAUDE.md
 
+## Backlog Process
+
+All work is tracked in **`BACKLOG.md`** at the project root. Before starting any coding session:
+1. Check `BACKLOG.md` for the next pending `[ ]` Code task.
+2. Update its status to `[~]` when starting, `[x]` when done.
+3. If a task is blocked on a user action, mark it `[!]` and note the blocker.
+
+---
+
 ## Project Overview
 
 Ktor backend for managing a movie catalogue. Features Google Sign-In via Supabase Auth, movie CRUD with photo storage, genre-based filtering, and an admin role that gates write operations.
