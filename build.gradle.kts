@@ -27,6 +27,8 @@ dependencies {
     implementation(ktorLibs.server.netty)
     implementation(libs.exposed.core)
     implementation(libs.exposed.jdbc)
+    implementation(libs.exposed.kotlin.datetime)
+    implementation(libs.kotlinx.datetime)
     implementation(libs.postgresql)
     implementation(libs.logback.classic)
 

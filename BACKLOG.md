@@ -44,8 +44,8 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked
 |---|--------|------|-------|
 | C4 | `[x]` | Delete scaffold files: `GreetingService.kt`, `UsersService.kt`, `Exposed.kt` | Done as part of C2 |
 | C5 | `[x]` | Create `plugins/` package, move `Http.kt`, `Serialization.kt`, `Security.kt`, `DI.kt` | Update module refs in `application.yaml` |
-| C6 | `[ ]` | Create domain models: `Genre.kt` (enum), `Movie.kt`, `User.kt` | Under `domain/model/` |
-| C7 | `[ ]` | Create Exposed tables: `MoviesTable.kt`, `UsersTable.kt` | Under `domain/table/` |
+| C6 | `[x]` | Create domain models: `Genre.kt` (enum), `Movie.kt`, `User.kt` | Under `domain/model/` |
+| C7 | `[x]` | Create Exposed tables: `MoviesTable.kt`, `UsersTable.kt` | Under `domain/table/` |
 
 ### Phase 3 — Database & Auth Plugin
 
