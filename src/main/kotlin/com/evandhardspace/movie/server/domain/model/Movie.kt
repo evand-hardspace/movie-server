@@ -13,4 +13,5 @@ data class Movie(
     val rating: Double?,
     @SerialName("photo_url") val photoUrl: String?,
     @SerialName("created_at") val createdAt: Instant,
+    @SerialName("is_favorited") val isFavorited: Boolean = false,
 )

@@ -75,12 +75,12 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| U9 | `[ ]` | Run `user_favorites` migration in Supabase SQL editor | Schema below |
-| C19 | `[ ]` | Create `FavoritesTable.kt` | Under `domain/table/` |
-| C20 | `[ ]` | Write `domain/service/FavoriteService.kt` — add/remove/list favorites | |
-| C21 | `[ ]` | Write `routes/FavoriteRoutes.kt` — `POST /movies/{id}/favorite`, `DELETE /movies/{id}/favorite` | Requires auth |
-| C22 | `[ ]` | Extend `GET /movies` + `GET /movies/{id}` — include `is_favorited` when JWT present | |
-| C23 | `[ ]` | Wire `FavoriteService` in `DI.kt`, add routes to `Routing.kt` | |
+| U9 | `[x]` | Run `user_favorites` migration in Supabase SQL editor | Applied via MCP |
+| C19 | `[x]` | Create `FavoritesTable.kt` | Under `domain/table/` |
+| C20 | `[x]` | Write `domain/service/FavoriteService.kt` — add/remove/list favorites | |
+| C21 | `[x]` | Write `routes/FavoriteRoutes.kt` — `POST /movies/{id}/favorite`, `DELETE /movies/{id}/favorite` | Requires auth |
+| C22 | `[x]` | Extend `GET /movies` + `GET /movies/{id}` — include `is_favorited` when JWT present | |
+| C23 | `[x]` | Wire `FavoriteService` in `DI.kt`, add routes to `Routing.kt` | |
 
 **Schema for U9:**
 ```sql

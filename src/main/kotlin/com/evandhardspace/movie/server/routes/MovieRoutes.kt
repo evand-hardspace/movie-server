@@ -1,6 +1,7 @@
 package com.evandhardspace.movie.server.routes
 
 import com.evandhardspace.movie.server.domain.model.Genre
+import com.evandhardspace.movie.server.domain.service.FavoriteService
 import com.evandhardspace.movie.server.domain.service.MovieService
 import com.evandhardspace.movie.server.domain.service.UserService
 import com.evandhardspace.movie.server.util.userId
@@ -23,23 +24,37 @@ data class MovieRequest(
     @SerialName("photo_url") val photoUrl: String? = null,
 )
 
-fun Route.movieRoutes(movieService: MovieService, userService: UserService) {
-    get("/movies") {
-        val genreParam = call.request.queryParameters["genre"]
-        val genre = if (genreParam != null) {
-            try { Genre.valueOf(genreParam) } catch (e: IllegalArgumentException) {
-                return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid genre: $genreParam"))
+fun Route.movieRoutes(movieService: MovieService, userService: UserService, favoriteService: FavoriteService) {
+    authenticate("auth-jwt", optional = true) {
+        get("/movies") {
+            val genreParam = call.request.queryParameters["genre"]
+            val genre = if (genreParam != null) {
+                try { Genre.valueOf(genreParam) } catch (e: IllegalArgumentException) {
+                    return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid genre: $genreParam"))
+                }
+            } else null
+            val movies = movieService.getMovies(genre)
+            val principal = call.principal<JWTPrincipal>()
+            if (principal != null) {
+                val favIds = favoriteService.getFavoritedMovieIds(principal.userId())
+                call.respond(movies.map { it.copy(isFavorited = UUID.fromString(it.id) in favIds) })
+            } else {
+                call.respond(movies)
             }
-        } else null
-        call.respond(movieService.getMovies(genre))
-    }
+        }
 
-    get("/movies/{id}") {
-        val id = parseUuid(call.pathParameters["id"]) ?: return@get call.respond(
-            HttpStatusCode.BadRequest, mapOf("error" to "Invalid movie ID")
-        )
-        val movie = movieService.getMovieById(id)
-        if (movie != null) call.respond(movie) else call.respond(HttpStatusCode.NotFound)
+        get("/movies/{id}") {
+            val id = parseUuid(call.pathParameters["id"]) ?: return@get call.respond(
+                HttpStatusCode.BadRequest, mapOf("error" to "Invalid movie ID")
+            )
+            val movie = movieService.getMovieById(id) ?: return@get call.respond(HttpStatusCode.NotFound)
+            val principal = call.principal<JWTPrincipal>()
+            if (principal != null) {
+                call.respond(movie.copy(isFavorited = favoriteService.isFavorited(principal.userId(), id)))
+            } else {
+                call.respond(movie)
+            }
+        }
     }
 
     authenticate("auth-jwt") {
@@ -80,6 +95,6 @@ fun Route.movieRoutes(movieService: MovieService, userService: UserService) {
     }
 }
 
-private fun parseUuid(value: String?): UUID? = value?.let {
+internal fun parseUuid(value: String?): UUID? = value?.let {
     try { UUID.fromString(it) } catch (e: IllegalArgumentException) { null }
 }
