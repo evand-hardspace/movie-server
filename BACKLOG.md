@@ -65,11 +65,11 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| C12 | `[ ]` | Write `routes/AuthRoutes.kt` — `POST /auth/sync` | |
-| C13 | `[ ]` | Write `routes/MovieRoutes.kt` — `GET /movies`, `GET /movies/{id}`, `POST /movies`, `PUT /movies/{id}` | |
-| C14 | `[ ]` | Write `util/PrincipalExt.kt` — helpers to extract user ID + admin flag from JWT principal | |
-| C15 | `[ ]` | Update `Routing.kt` — remove placeholder routes, wire `AuthRoutes` + `MovieRoutes` | |
-| C16 | `[ ]` | Update `DI.kt` — provide `UserService` and `MovieService` via Koin | |
+| C12 | `[x]` | Write `routes/AuthRoutes.kt` — `POST /auth/sync` | |
+| C13 | `[x]` | Write `routes/MovieRoutes.kt` — `GET /movies`, `GET /movies/{id}`, `POST /movies`, `PUT /movies/{id}` | |
+| C14 | `[x]` | Write `util/PrincipalExt.kt` — helpers to extract user ID + admin flag from JWT principal | |
+| C15 | `[x]` | Update `Routing.kt` — remove placeholder routes, wire `AuthRoutes` + `MovieRoutes` | |
+| C16 | `[x]` | Update `DI.kt` — provide `UserService` and `MovieService` via Koin | |
 
 ### Phase 6 — Favorites
 
