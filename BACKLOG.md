@@ -10,21 +10,21 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| U1 | `[ ]` | Create Supabase project | Needed before any backend config |
-| U2 | `[ ]` | Enable Google OAuth provider in Supabase Auth dashboard | Auth → Providers → Google |
-| U3 | `[!]` | Run database schema SQL in Supabase SQL editor | Blocked on U1; SQL is in CLAUDE.md under "Database Schema" |
-| U4 | `[!]` | Create Supabase Storage bucket for movie images | Blocked on U1; set bucket to public or use signed URLs |
-| U5 | `[!]` | Provide environment variable values | Blocked on U1; see list below |
-| U6 | `[ ]` | Create Google Cloud project | For Cloud Run hosting |
-| U7 | `[!]` | Create Google Artifact Registry repository | Blocked on U6 |
-| U8 | `[!]` | Set up GitHub Actions secrets (for CI/CD) | Blocked on U5, U7 |
+| U1 | `[x]` | Create Supabase project | Project ref: `hrecjmjmncoiydjopnzc` |
+| U2 | `[x]` | ~~Enable Google OAuth provider~~ — using Supabase email auth instead | Email auth is enabled by default; no setup needed |
+| U3 | `[x]` | Run database schema SQL in Supabase SQL editor | Applied via migration `initial_schema` |
+| U4 | `[x]` | Create Supabase Storage bucket for movie images | Bucket `movies` created (public) |
+| U5 | `[x]` | Provide environment variable values | All env vars available |
+| U6 | `[x]` | Create Google Cloud project | For Cloud Run hosting |
+| U7 | `[x]` | Create Google Artifact Registry repository | `us-central1-docker.pkg.dev/$GCP_PROJECT_ID/movie-server` |
+| U8 | `[x]` | Set up GitHub Actions secrets (for CI/CD) | WIF auth; 8 secrets set |
 
 **Required env vars (for U5):**
-- `DATABASE_URL` — `jdbc:postgresql://db.<ref>.supabase.co:5432/postgres`
+- `DATABASE_URL` — `jdbc:postgresql://db.hrecjmjmncoiydjopnzc.supabase.co:5432/postgres`
 - `DATABASE_USER` — `postgres`
-- `DATABASE_PASSWORD` — from Supabase dashboard → Settings → Database
-- `SUPABASE_JWT_ISSUER` — `https://<ref>.supabase.co/auth/v1`
-- `SUPABASE_JWKS_URI` — `https://<ref>.supabase.co/auth/v1/keys`
+- `DATABASE_PASSWORD` — **needed from you**: Supabase dashboard → Settings → Database
+- `SUPABASE_JWT_ISSUER` — `https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1`
+- `SUPABASE_JWKS_URI` — `https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1/keys`
 
 ---
 

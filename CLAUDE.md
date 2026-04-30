@@ -209,14 +209,15 @@ Remove: `exposed-r2dbc`, `h2database-h2`, `h2database-r2dbc`
 | `DATABASE_PASSWORD` | DB password |
 | `SUPABASE_JWT_ISSUER` | `https://<ref>.supabase.co/auth/v1` |
 | `SUPABASE_JWKS_URI` | `https://<ref>.supabase.co/auth/v1/keys` |
+| `GCP_PROJECT_ID` | Google Cloud project ID — stored on device only, never committed |
 
 ---
 
 ## Deployment
 
 - **Containerize:** `./gradlew buildFatJar` → `Dockerfile` FROM `eclipse-temurin:21-jre`
-- **Registry:** Google Artifact Registry
-- **Deploy:** `gcloud run deploy movie-server --image ...`
+- **Registry:** Google Artifact Registry — `us-central1-docker.pkg.dev/$GCP_PROJECT_ID/movie-server`
+- **Deploy:** `gcloud run deploy movie-server --image us-central1-docker.pkg.dev/$GCP_PROJECT_ID/movie-server/movie-server:latest --region us-central1`
 - **CI:** GitHub Actions → build → push → deploy
 
 ---
