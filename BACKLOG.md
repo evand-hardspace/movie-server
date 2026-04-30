@@ -51,8 +51,8 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| C8 | `[ ]` | Write `plugins/Database.kt` — JDBC `Database.connect()` from env vars | Replaces `Exposed.kt` |
-| C9 | `[ ]` | Rewrite `plugins/Security.kt` — Supabase JWKS JWT validation | Read issuer/JWKS URI from config |
+| C8 | `[x]` | Write `plugins/Database.kt` — JDBC `Database.connect()` from env vars | Replaces `Exposed.kt` |
+| C9 | `[x]` | Rewrite `plugins/Security.kt` — Supabase JWKS JWT validation | Read issuer/JWKS URI from config |
 
 ### Phase 4 — Services
 

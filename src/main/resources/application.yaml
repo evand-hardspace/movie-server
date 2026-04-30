@@ -5,6 +5,7 @@ ktor:
     modules:
       - com.evandhardspace.movie.server.plugins.HttpKt.configureHttp
       - com.evandhardspace.movie.server.plugins.SerializationKt.configureSerialization
+      - com.evandhardspace.movie.server.plugins.DatabaseKt.configureDatabase
       - com.evandhardspace.movie.server.plugins.SecurityKt.configureSecurity
       - com.evandhardspace.movie.server.plugins.DIKt.configureDependencyInjection
       - com.evandhardspace.movie.server.RoutingKt.configureRouting
