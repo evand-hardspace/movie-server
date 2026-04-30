@@ -71,7 +71,30 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked
 | C15 | `[ ]` | Update `Routing.kt` — remove placeholder routes, wire `AuthRoutes` + `MovieRoutes` | |
 | C16 | `[ ]` | Update `DI.kt` — provide `UserService` and `MovieService` via Koin | |
 
-### Phase 6 — Deployment
+### Phase 6 — Favorites
+
+| # | Status | Task | Notes |
+|---|--------|------|-------|
+| U9 | `[ ]` | Run `user_favorites` migration in Supabase SQL editor | Schema below |
+| C19 | `[ ]` | Create `FavoritesTable.kt` | Under `domain/table/` |
+| C20 | `[ ]` | Write `domain/service/FavoriteService.kt` — add/remove/list favorites | |
+| C21 | `[ ]` | Write `routes/FavoriteRoutes.kt` — `POST /movies/{id}/favorite`, `DELETE /movies/{id}/favorite` | Requires auth |
+| C22 | `[ ]` | Extend `GET /movies` + `GET /movies/{id}` — include `is_favorited` when JWT present | |
+| C23 | `[ ]` | Wire `FavoriteService` in `DI.kt`, add routes to `Routing.kt` | |
+
+**Schema for U9:**
+```sql
+CREATE TABLE user_favorites (
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    movie_id   UUID NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, movie_id)
+);
+```
+
+---
+
+### Phase 7 — Deployment
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
