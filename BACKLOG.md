@@ -58,8 +58,8 @@ Status legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[!]` blocked
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| C10 | `[ ]` | Write `domain/service/UserService.kt` — upsert user from JWT claims | |
-| C11 | `[ ]` | Write `domain/service/MovieService.kt` — CRUD + genre filter | |
+| C10 | `[x]` | Write `domain/service/UserService.kt` — upsert user from JWT claims | |
+| C11 | `[x]` | Write `domain/service/MovieService.kt` — CRUD + genre filter | |
 
 ### Phase 5 — Routes
 
