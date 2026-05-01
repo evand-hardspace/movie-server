@@ -69,7 +69,7 @@ jobs:
             --project="${{ secrets.GCP_PROJECT_ID }}"
 
   deploy-docs:
-    name: Deploy API Docs
+    name: Deploy API Docs + Admin Panel
     needs: test
     runs-on: ubuntu-latest
     permissions:
@@ -83,7 +83,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build docs site
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Build API docs site
         run: |
           mkdir -p _site/openapi
           cp src/main/resources/openapi/documentation.yaml _site/openapi/documentation.yaml
@@ -102,6 +108,12 @@ jobs:
             </body>
           </html>
           EOF
+
+      - name: Build admin panel (WASM)
+        run: ./gradlew :admin-panel:wasmJsBrowserDistribution
+
+      - name: Copy admin panel to site
+        run: cp -r admin-panel/build/dist/wasmJs/productionExecutable _site/admin
 
       - uses: actions/configure-pages@v4
 
