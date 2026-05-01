@@ -94,6 +94,63 @@ CREATE TABLE user_favorites (
 
 ---
 
+### Phase 8 — Admin Panel Backend Support
+
+Backend endpoints needed by the admin panel. Both require authentication.
+
+| # | Status | Task | Notes |
+|---|--------|------|-------|
+| B1 | `[ ]` | Add `GET /users/me` — returns current user's id, email, role | Used by admin panel to know the caller's role after login |
+| B2 | `[ ]` | Add `GET /users` (super_admin only) — returns list of all users with id, email, role | Used by user management tab |
+
+---
+
+### Phase 9 — Admin Panel Module
+
+Separate KMP module `admin-panel/` in this repo. WASM is the only target for now; architecture must support adding targets (Android, Desktop, iOS) without restructuring.
+
+**Multi-target design rules:**
+- All UI and business logic lives in `commonMain`
+- Platform-specific code (token storage, HTTP engine) isolated behind `expect/actual`
+- One `expect class TokenStorage` — `wasmJsMain` uses `localStorage`; future targets add their own `actual`
+- Ktor engine selected per source set (`ktor-client-js` for `wasmJsMain`)
+
+#### AP0 — Module Scaffold
+
+| # | Status | Task | Notes |
+|---|--------|------|-------|
+| AP1 | `[ ]` | Create `admin-panel/` module, include it in root `settings.gradle.kts` | KMP module, no Android plugin |
+| AP2 | `[ ]` | Configure `admin-panel/build.gradle.kts` — wasmJs target, Compose MP plugin, Ktor client, kotlinx-serialization | Compose MP version must match Kotlin 2.3.20 |
+| AP3 | `[ ]` | `wasmJsMain/main.kt` — WASM entry point calling `CanvasBasedWindow { App() }` | Standard Compose MP WASM bootstrap |
+| AP4 | `[ ]` | `expect class TokenStorage` in `commonMain`; `actual` in `wasmJsMain` backed by `localStorage` | Isolates storage so adding Android/Desktop needs only a new `actual` |
+
+#### AP1 — Data Layer (commonMain)
+
+| # | Status | Task | Notes |
+|---|--------|------|-------|
+| AP5 | `[ ]` | `ApiClient` — Ktor `HttpClient` wrapper that injects `Authorization: Bearer` from `TokenStorage`; returns typed results or error | Common to all screens |
+| AP6 | `[ ]` | `AuthRepository` — `login(email, password)` calling `POST /auth/login`; stores tokens via `TokenStorage` | On 401 from any other call, clear storage and redirect to login |
+| AP7 | `[ ]` | `MovieRepository` — `getMovies()`, `createMovie(request)`, `updateMovie(id, request)` | Maps API DTOs to domain models |
+| AP8 | `[ ]` | `UserRepository` — `getMe()` calling `GET /users/me`, `getUsers()` calling `GET /users`, `updateRole(id, role)` | `getMe()` used to determine role after login |
+
+#### AP2 — Navigation & Session (commonMain)
+
+| # | Status | Task | Notes |
+|---|--------|------|-------|
+| AP9 | `[ ]` | `AppState` — holds `currentScreen` (sealed class), `userRole`, `accessToken`; drives top-level `App` composable | Simple state machine instead of a nav library — keeps it readable |
+| AP10 | `[ ]` | `App.kt` — root composable that switches screens based on `AppState`; shows bottom tabs (Movies / Users) for super_admin | Users tab only visible when `role == super_admin` |
+
+#### AP3 — Screens (commonMain)
+
+| # | Status | Task | Notes |
+|---|--------|------|-------|
+| AP11 | `[ ]` | `LoginScreen` — email/password form, calls `AuthRepository.login()`, then `UserRepository.getMe()` to load role | Show error on wrong credentials |
+| AP12 | `[ ]` | `MovieListScreen` — shows all movies in a list/grid; FAB to add; tap row to edit | Calls `MovieRepository.getMovies()` |
+| AP13 | `[ ]` | `MovieFormScreen` — single screen for both add and edit; pre-fills fields when editing | Genre shown as dropdown; submit calls `createMovie` or `updateMovie` depending on mode |
+| AP14 | `[ ]` | `UserListScreen` — shows all users with email + role badge; tap row to change role via dropdown | Only reachable for super_admin; calls `UserRepository.getUsers()` + `updateRole()` |
+
+---
+
 ### Phase 7 — Deployment
 
 | # | Status | Task | Notes |
