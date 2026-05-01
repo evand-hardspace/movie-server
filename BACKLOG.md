@@ -128,10 +128,10 @@ Separate KMP module `admin-panel/` in this repo. WASM is the only target for now
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| AP5 | `[ ]` | `ApiClient` — Ktor `HttpClient` wrapper that injects `Authorization: Bearer` from `TokenStorage`; returns typed results or error | Common to all screens |
-| AP6 | `[ ]` | `AuthRepository` — `login(email, password)` calling `POST /auth/login`; stores tokens via `TokenStorage` | On 401 from any other call, clear storage and redirect to login |
-| AP7 | `[ ]` | `MovieRepository` — `getMovies()`, `createMovie(request)`, `updateMovie(id, request)` | Maps API DTOs to domain models |
-| AP8 | `[ ]` | `UserRepository` — `getMe()` calling `GET /users/me`, `getUsers()` calling `GET /users`, `updateRole(id, role)` | `getMe()` used to determine role after login |
+| AP5 | `[x]` | `ApiClient` — Ktor `HttpClient` wrapper that injects `Authorization: Bearer` from `TokenStorage`; returns typed results or error | Common to all screens |
+| AP6 | `[x]` | `AuthRepository` — `login(email, password)` calling `POST /auth/login`; stores tokens via `TokenStorage` | On 401 from any other call, clear storage and redirect to login |
+| AP7 | `[x]` | `MovieRepository` — `getMovies()`, `createMovie(request)`, `updateMovie(id, request)` | Maps API DTOs to domain models |
+| AP8 | `[x]` | `UserRepository` — `getMe()` calling `GET /users/me`, `getUsers()` calling `GET /users`, `updateRole(id, role)` | `getMe()` used to determine role after login |
 
 #### AP2 — Navigation & Session (commonMain)
 
