@@ -17,11 +17,13 @@ servers:
 
 tags:
   - name: Auth
-    description: User synchronization
+    description: Registration, login, and token refresh
   - name: Movies
     description: Movie catalogue — read operations are public, writes require admin
   - name: Favorites
     description: Per-user movie favorites (requires authentication)
+  - name: Users
+    description: User management (requires super_admin)
 
 security: []
 
@@ -34,6 +36,13 @@ components:
       description: Supabase JWT — obtain via `supabase.auth.signInWithPassword()`
 
   schemas:
+    UserRole:
+      type: string
+      enum:
+        - user
+        - admin
+        - super_admin
+
     Genre:
       type: string
       enum:
@@ -407,6 +416,57 @@ paths:
                 $ref: '#/components/schemas/Error'
         '404':
           description: Movie not found.
+
+  /users/{id}/role:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Target user UUID.
+        schema:
+          type: string
+          format: uuid
+
+    put:
+      summary: Update user role
+      description: Sets the role of any user. Requires `super_admin` privileges.
+      operationId: updateUserRole
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: '#/components/schemas/UserRole'
+      responses:
+        '200':
+          description: Role updated successfully.
+        '400':
+          description: ID is not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Caller does not have super_admin privileges.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Target user not found.
 
   /movies/{id}/favorite:
     parameters:
