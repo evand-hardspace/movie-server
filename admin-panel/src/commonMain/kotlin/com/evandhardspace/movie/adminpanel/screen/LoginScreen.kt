@@ -36,7 +36,7 @@ fun LoginScreen(appState: AppState) {
 
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
-            modifier = Modifier.width(320.dp).padding(24.dp),
+            modifier = Modifier.width(320.dp).padding(top = 32.dp, start = 24.dp, end = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
