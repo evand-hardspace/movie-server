@@ -137,8 +137,8 @@ Separate KMP module `admin-panel/` in this repo. WASM is the only target for now
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| AP9 | `[ ]` | `AppState` — holds `currentScreen` (sealed class), `userRole`, `accessToken`; drives top-level `App` composable | Simple state machine instead of a nav library — keeps it readable |
-| AP10 | `[ ]` | `App.kt` — root composable that switches screens based on `AppState`; shows bottom tabs (Movies / Users) for super_admin | Users tab only visible when `role == super_admin` |
+| AP9 | `[x]` | `AppState` — holds `currentScreen` (sealed class), `userRole`, `accessToken`; drives top-level `App` composable | Simple state machine instead of a nav library — keeps it readable |
+| AP10 | `[x]` | `App.kt` — root composable that switches screens based on `AppState`; shows bottom tabs (Movies / Users) for super_admin | Users tab only visible when `role == super_admin` |
 
 #### AP3 — Screens (commonMain)
 
