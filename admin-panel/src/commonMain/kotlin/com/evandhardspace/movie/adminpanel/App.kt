@@ -1,15 +1,23 @@
 package com.evandhardspace.movie.adminpanel
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.evandhardspace.movie.adminpanel.data.ApiClient
 import com.evandhardspace.movie.adminpanel.data.AuthRepository
 import com.evandhardspace.movie.adminpanel.data.MovieRepository
@@ -61,8 +69,18 @@ private fun AuthenticatedContent(appState: AppState) {
 
     val selectedTab = if (currentScreen is Screen.UserList) 1 else 0
 
-    Column(androidx.compose.ui.Modifier.fillMaxSize()) {
-        Box(androidx.compose.ui.Modifier.weight(1f).fillMaxSize()) {
+    Column(Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = { appState.logout() }) {
+                Text("Logout", color = MaterialTheme.colorScheme.error)
+            }
+        }
+
+        Box(Modifier.weight(1f).fillMaxSize()) {
             when (currentScreen) {
                 is Screen.MovieList -> MovieListScreen(appState)
                 is Screen.UserList -> UserListScreen(appState)

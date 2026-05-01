@@ -16,6 +16,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+
 import com.evandhardspace.movie.adminpanel.AppState
 import com.evandhardspace.movie.adminpanel.Screen
 import com.evandhardspace.movie.adminpanel.data.ApiResult
@@ -78,6 +80,15 @@ fun MovieListScreen(appState: AppState) {
                         MovieListItem(
                             movie = movie,
                             onClick = { appState.navigateTo(Screen.MovieForm(movie)) },
+                            onDelete = {
+                                coroutineScope.launch {
+                                    when (appState.movieRepository.deleteMovie(movie.id)) {
+                                        is ApiResult.Success -> movies = movies.filter { it.id != movie.id }
+                                        is ApiResult.Unauthorized -> appState.onUnauthorized()
+                                        is ApiResult.Error -> errorMessage = "Failed to delete ${movie.title}"
+                                    }
+                                }
+                            },
                         )
                     }
                 }
@@ -87,20 +98,29 @@ fun MovieListScreen(appState: AppState) {
 }
 
 @Composable
-private fun MovieListItem(movie: Movie, onClick: () -> Unit) {
+private fun MovieListItem(movie: Movie, onClick: () -> Unit, onDelete: () -> Unit) {
     Card(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(movie.title, style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(movie.genre.name, style = MaterialTheme.typography.bodySmall)
-                if (movie.rating != null) {
-                    Text("${movie.rating} / 10", style = MaterialTheme.typography.bodySmall)
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(movie.title, style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(movie.genre.name, style = MaterialTheme.typography.bodySmall)
+                    if (movie.rating != null) {
+                        Text("${movie.rating} / 10", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
+            }
+            TextButton(onClick = onDelete) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
             }
         }
     }

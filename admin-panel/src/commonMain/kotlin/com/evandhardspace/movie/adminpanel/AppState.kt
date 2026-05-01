@@ -61,6 +61,12 @@ class AppState(
         currentScreen = Screen.MovieList
     }
 
+    fun logout() {
+        tokenStorage.clear()
+        userRole = null
+        currentScreen = Screen.Login
+    }
+
     fun onUnauthorized() {
         tokenStorage.clear()
         userRole = null

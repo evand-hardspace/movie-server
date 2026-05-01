@@ -65,6 +65,12 @@ class ApiClient(
         }
     }
 
+    suspend inline fun <reified T> delete(path: String): ApiResult<T> = execute {
+        httpClient.delete("$baseUrl$path") {
+            bearerToken()?.let { header(HttpHeaders.Authorization, it) }
+        }
+    }
+
     @PublishedApi
     internal suspend inline fun <reified T> execute(block: suspend () -> HttpResponse): ApiResult<T> = try {
         val response = block()

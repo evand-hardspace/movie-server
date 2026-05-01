@@ -46,4 +46,7 @@ class MovieRepository(private val apiClient: ApiClient) {
 
     suspend fun updateMovie(id: String, request: MovieRequest): ApiResult<Movie> =
         apiClient.put<MovieDto>("/movies/$id", request).map { it.toDomain() }
+
+    suspend fun deleteMovie(id: String): ApiResult<Unit> =
+        apiClient.delete("/movies/$id")
 }

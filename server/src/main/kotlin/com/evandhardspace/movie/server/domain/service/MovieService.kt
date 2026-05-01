@@ -7,6 +7,7 @@ import com.evandhardspace.movie.server.domain.table.UsersTable
 import org.jetbrains.exposed.v1.core.ResultRow
 import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
@@ -83,6 +84,10 @@ class MovieService {
             .where { MoviesTable.id eq id }
             .singleOrNull()
             ?.toMovie()
+    }
+
+    fun deleteMovie(id: UUID): Boolean = transaction {
+        MoviesTable.deleteWhere { MoviesTable.id eq id } > 0
     }
 
     private fun ResultRow.toMovie() = Movie(

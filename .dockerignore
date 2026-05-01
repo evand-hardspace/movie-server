@@ -1,2 +1,2 @@
 *
-!build/libs/*.jar
+!server/build/libs/*.jar

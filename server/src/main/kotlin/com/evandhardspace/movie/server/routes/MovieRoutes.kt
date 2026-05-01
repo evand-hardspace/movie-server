@@ -92,6 +92,17 @@ fun Route.movieRoutes(movieService: MovieService, userService: UserService, favo
             )
             if (movie != null) call.respond(movie) else call.respond(HttpStatusCode.NotFound)
         }
+
+        delete("/movies/{id}") {
+            val principal = call.principal<JWTPrincipal>()!!
+            val userId = principal.userId()
+            if (!userService.isAdmin(userId)) return@delete call.respond(HttpStatusCode.Forbidden)
+            val id = parseUuid(call.pathParameters["id"]) ?: return@delete call.respond(
+                HttpStatusCode.BadRequest, mapOf("error" to "Invalid movie ID")
+            )
+            val deleted = movieService.deleteMovie(id)
+            if (deleted) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound)
+        }
     }
 }
 
