@@ -100,8 +100,8 @@ Backend endpoints needed by the admin panel. Both require authentication.
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| B1 | `[ ]` | Add `GET /users/me` — returns current user's id, email, role | Used by admin panel to know the caller's role after login |
-| B2 | `[ ]` | Add `GET /users` (super_admin only) — returns list of all users with id, email, role | Used by user management tab |
+| B1 | `[x]` | Add `GET /users/me` — returns current user's id, email, role | Used by admin panel to know the caller's role after login |
+| B2 | `[x]` | Add `GET /users` (super_admin only) — returns list of all users with id, email, role | Used by user management tab |
 
 ---
 

@@ -2,6 +2,7 @@ package com.evandhardspace.movie.server.routes
 
 import com.evandhardspace.movie.server.configureTestApp
 import com.evandhardspace.movie.server.createTestToken
+import com.evandhardspace.movie.server.domain.model.User
 import com.evandhardspace.movie.server.domain.model.UserRole
 import com.evandhardspace.movie.server.domain.service.FavoriteService
 import com.evandhardspace.movie.server.domain.service.MovieService
@@ -35,6 +36,58 @@ class UserRoutesTest {
     private fun routeTest(block: suspend ApplicationTestBuilder.(HttpClient) -> Unit) = testApplication {
         configureTestApp(userService, movieService, favoriteService)
         block(createClient {})
+    }
+
+    @Test
+    fun `GET users me without JWT returns 401`() = routeTest { client ->
+        val response = client.get("/users/me")
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun `GET users me with JWT returns current user`() = routeTest { client ->
+        every { userService.getUser(userId) } returns User(userId, "test@example.com", UserRole.USER)
+        val response = client.get("/users/me") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
+    }
+
+    @Test
+    fun `GET users me when user not found returns 404`() = routeTest { client ->
+        every { userService.getUser(userId) } returns null
+        val response = client.get("/users/me") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    @Test
+    fun `GET users without JWT returns 401`() = routeTest { client ->
+        val response = client.get("/users")
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun `GET users with non-super-admin returns 403`() = routeTest { client ->
+        every { userService.isSuperAdmin(userId) } returns false
+        val response = client.get("/users") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+
+    @Test
+    fun `GET users with super admin returns list`() = routeTest { client ->
+        every { userService.isSuperAdmin(userId) } returns true
+        every { userService.getAllUsers() } returns listOf(
+            User(userId, "test@example.com", UserRole.SUPER_ADMIN),
+            User(targetId, "other@example.com", UserRole.USER),
+        )
+        val response = client.get("/users") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, response.status)
     }
 
     @Test

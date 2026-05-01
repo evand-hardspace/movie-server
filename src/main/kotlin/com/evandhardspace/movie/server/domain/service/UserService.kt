@@ -1,5 +1,6 @@
 package com.evandhardspace.movie.server.domain.service
 
+import com.evandhardspace.movie.server.domain.model.User
 import com.evandhardspace.movie.server.domain.model.UserRole
 import com.evandhardspace.movie.server.domain.table.UsersTable
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
@@ -40,5 +41,28 @@ class UserService {
         UsersTable.update({ UsersTable.id eq targetUserId }) {
             it[role] = newRole
         } > 0
+    }
+
+    fun getUser(userId: UUID): User? = transaction {
+        UsersTable.selectAll()
+            .where { UsersTable.id eq userId }
+            .singleOrNull()
+            ?.let { row ->
+                User(
+                    id = row[UsersTable.id].value,
+                    email = row[UsersTable.email],
+                    role = row[UsersTable.role],
+                )
+            }
+    }
+
+    fun getAllUsers(): List<User> = transaction {
+        UsersTable.selectAll().map { row ->
+            User(
+                id = row[UsersTable.id].value,
+                email = row[UsersTable.email],
+                role = row[UsersTable.role],
+            )
+        }
     }
 }

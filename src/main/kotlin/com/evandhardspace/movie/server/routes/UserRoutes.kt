@@ -10,12 +10,31 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.serialization.Serializable
+import java.util.UUID
 
 @Serializable
 data class UpdateRoleRequest(val role: UserRole)
 
+@Serializable
+data class UserResponse(val id: String, val email: String, val role: UserRole)
+
 fun Route.userRoutes(userService: UserService) {
     authenticate("auth-jwt") {
+        get("/users/me") {
+            val principal = call.principal<JWTPrincipal>()!!
+            val user = userService.getUser(principal.userId())
+                ?: return@get call.respond(HttpStatusCode.NotFound, mapOf("error" to "User not found"))
+            call.respond(UserResponse(user.id.toString(), user.email, user.role))
+        }
+
+        get("/users") {
+            val principal = call.principal<JWTPrincipal>()!!
+            if (!userService.isSuperAdmin(principal.userId()))
+                return@get call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Super admin access required"))
+            val users = userService.getAllUsers().map { UserResponse(it.id.toString(), it.email, it.role) }
+            call.respond(users)
+        }
+
         put("/users/{id}/role") {
             val principal = call.principal<JWTPrincipal>()!!
             if (!userService.isSuperAdmin(principal.userId()))
