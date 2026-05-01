@@ -3,7 +3,6 @@ package com.evandhardspace.movie.adminpanel
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
@@ -11,13 +10,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import com.evandhardspace.movie.adminpanel.data.ApiClient
 import com.evandhardspace.movie.adminpanel.data.AuthRepository
 import com.evandhardspace.movie.adminpanel.data.MovieRepository
 import com.evandhardspace.movie.adminpanel.data.UserRepository
 import com.evandhardspace.movie.adminpanel.domain.model.UserRole
+import com.evandhardspace.movie.adminpanel.screen.LoginScreen
+import com.evandhardspace.movie.adminpanel.screen.MovieFormScreen
+import com.evandhardspace.movie.adminpanel.screen.MovieListScreen
+import com.evandhardspace.movie.adminpanel.screen.UserListScreen
 import com.evandhardspace.movie.adminpanel.storage.TokenStorage
 
 @Composable
@@ -43,7 +44,7 @@ fun App() {
 @Composable
 private fun AppContent(appState: AppState) {
     when (appState.currentScreen) {
-        is Screen.Login -> LoginScreenPlaceholder()
+        is Screen.Login -> LoginScreen(appState)
         else -> AuthenticatedContent(appState)
     }
 }
@@ -54,30 +55,17 @@ private fun AuthenticatedContent(appState: AppState) {
     val isSuperAdmin = appState.userRole == UserRole.SUPER_ADMIN
 
     if (currentScreen is Screen.MovieForm) {
-        // AP13: replace with MovieFormScreen(appState, currentScreen.movieId)
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Movie Form — id: ${currentScreen.movieId ?: "new"}")
-        }
+        MovieFormScreen(appState, currentScreen.movie)
         return
     }
 
     val selectedTab = if (currentScreen is Screen.UserList) 1 else 0
 
-    Column(Modifier.fillMaxSize()) {
-        Box(Modifier.weight(1f).fillMaxSize()) {
+    Column(androidx.compose.ui.Modifier.fillMaxSize()) {
+        Box(androidx.compose.ui.Modifier.weight(1f).fillMaxSize()) {
             when (currentScreen) {
-                is Screen.MovieList -> {
-                    // AP12: replace with MovieListScreen(appState)
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("Movie List")
-                    }
-                }
-                is Screen.UserList -> {
-                    // AP14: replace with UserListScreen(appState)
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("User List")
-                    }
-                }
+                is Screen.MovieList -> MovieListScreen(appState)
+                is Screen.UserList -> UserListScreen(appState)
                 else -> {}
             }
         }
@@ -96,13 +84,5 @@ private fun AuthenticatedContent(appState: AppState) {
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun LoginScreenPlaceholder() {
-    // AP11: replace with LoginScreen(appState)
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("Login Screen")
     }
 }

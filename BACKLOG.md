@@ -144,10 +144,10 @@ Separate KMP module `admin-panel/` in this repo. WASM is the only target for now
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| AP11 | `[ ]` | `LoginScreen` — email/password form, calls `AuthRepository.login()`, then `UserRepository.getMe()` to load role | Show error on wrong credentials |
-| AP12 | `[ ]` | `MovieListScreen` — shows all movies in a list/grid; FAB to add; tap row to edit | Calls `MovieRepository.getMovies()` |
-| AP13 | `[ ]` | `MovieFormScreen` — single screen for both add and edit; pre-fills fields when editing | Genre shown as dropdown; submit calls `createMovie` or `updateMovie` depending on mode |
-| AP14 | `[ ]` | `UserListScreen` — shows all users with email + role badge; tap row to change role via dropdown | Only reachable for super_admin; calls `UserRepository.getUsers()` + `updateRole()` |
+| AP11 | `[x]` | `LoginScreen` — email/password form, calls `AuthRepository.login()`, then `UserRepository.getMe()` to load role | Show error on wrong credentials |
+| AP12 | `[x]` | `MovieListScreen` — shows all movies in a list/grid; FAB to add; tap row to edit | Calls `MovieRepository.getMovies()` |
+| AP13 | `[x]` | `MovieFormScreen` — single screen for both add and edit; pre-fills fields when editing | Genre shown as dropdown; submit calls `createMovie` or `updateMovie` depending on mode |
+| AP14 | `[x]` | `UserListScreen` — shows all users with email + role badge; tap row to change role via dropdown | Only reachable for super_admin; calls `UserRepository.getUsers()` + `updateRole()` |
 
 ---
 
