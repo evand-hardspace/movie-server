@@ -119,10 +119,10 @@ Separate KMP module `admin-panel/` in this repo. WASM is the only target for now
 
 | # | Status | Task | Notes |
 |---|--------|------|-------|
-| AP1 | `[ ]` | Create `admin-panel/` module, include it in root `settings.gradle.kts` | KMP module, no Android plugin |
-| AP2 | `[ ]` | Configure `admin-panel/build.gradle.kts` — wasmJs target, Compose MP plugin, Ktor client, kotlinx-serialization | Compose MP version must match Kotlin 2.3.20 |
-| AP3 | `[ ]` | `wasmJsMain/main.kt` — WASM entry point calling `CanvasBasedWindow { App() }` | Standard Compose MP WASM bootstrap |
-| AP4 | `[ ]` | `expect class TokenStorage` in `commonMain`; `actual` in `wasmJsMain` backed by `localStorage` | Isolates storage so adding Android/Desktop needs only a new `actual` |
+| AP1 | `[x]` | Create `admin-panel/` module, include it in root `settings.gradle.kts` | KMP module, no Android plugin |
+| AP2 | `[x]` | Configure `admin-panel/build.gradle.kts` — wasmJs target, Compose MP plugin, Ktor client, kotlinx-serialization | Compose MP 1.11.0-beta03 with Kotlin 2.3.20 |
+| AP3 | `[x]` | `wasmJsMain/main.kt` — WASM entry point calling `ComposeViewport { App() }` | Uses ComposeViewport (replaces CanvasBasedWindow in CMP 1.9+) |
+| AP4 | `[x]` | `expect class TokenStorage` in `commonMain`; `actual` in `wasmJsMain` backed by `localStorage` | Isolates storage so adding Android/Desktop needs only a new `actual` |
 
 #### AP1 — Data Layer (commonMain)
 
