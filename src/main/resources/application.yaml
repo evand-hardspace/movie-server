@@ -14,3 +14,7 @@ jwt:
   issuer: ${SUPABASE_JWT_ISSUER}
   audience: "authenticated"
   jwksUri: ${SUPABASE_JWKS_URI}
+
+supabase:
+  url: ${SUPABASE_URL}
+  anon_key: ${SUPABASE_ANON_KEY}

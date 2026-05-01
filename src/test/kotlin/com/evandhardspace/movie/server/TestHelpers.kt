@@ -4,9 +4,11 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.evandhardspace.movie.server.domain.model.Genre
 import com.evandhardspace.movie.server.domain.model.Movie
+import com.evandhardspace.movie.server.domain.service.AuthService
 import com.evandhardspace.movie.server.domain.service.FavoriteService
 import com.evandhardspace.movie.server.domain.service.MovieService
 import com.evandhardspace.movie.server.domain.service.UserService
+import io.mockk.mockk
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.auth.*
@@ -33,6 +35,7 @@ internal fun ApplicationTestBuilder.configureTestApp(
     userService: UserService,
     movieService: MovieService,
     favoriteService: FavoriteService,
+    authService: AuthService = mockk(),
 ) {
     // install at ApplicationTestBuilder level to avoid ambiguity with Application.install
     install(ContentNegotiation) { json() }
@@ -53,6 +56,7 @@ internal fun ApplicationTestBuilder.configureTestApp(
     }
     application {
         dependencies {
+            provide<AuthService> { authService }
             provide<UserService> { userService }
             provide<MovieService> { movieService }
             provide<FavoriteService> { favoriteService }

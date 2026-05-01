@@ -13,6 +13,8 @@ All work is tracked in **`BACKLOG.md`** at the project root. Before starting any
 
 Ktor backend for managing a movie catalogue. Features Google Sign-In via Supabase Auth, movie CRUD with photo storage, genre-based filtering, and an admin role that gates write operations.
 
+This project serves **educational purposes** as a simple Ktor backend for an Android application. The target audience is Android students learning how to build and connect a real backend.
+
 ---
 
 ## Tech Stack
