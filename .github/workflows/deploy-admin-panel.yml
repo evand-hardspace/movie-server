@@ -1,0 +1,62 @@
+name: Deploy Admin Panel
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'admin-panel/**'
+
+jobs:
+  deploy-admin-panel:
+    name: Build & Deploy Admin Panel
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Build admin panel (WASM)
+        run: ./gradlew :admin-panel:wasmJsBrowserDistribution
+
+      - name: Prepare site
+        run: |
+          mkdir -p _site/openapi
+          cp server/src/main/resources/openapi/documentation.yaml _site/openapi/documentation.yaml
+          cat > _site/index.html << 'EOF'
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Movie Server API</title>
+              <meta charset="utf-8"/>
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>body { margin: 0; padding: 0; }</style>
+            </head>
+            <body>
+              <redoc spec-url='openapi/documentation.yaml'></redoc>
+              <script src="https://cdn.jsdelivr.net/npm/redoc@latest/bundles/redoc.standalone.js"></script>
+            </body>
+          </html>
+          EOF
+          cp -r admin-panel/build/dist/wasmJs/productionExecutable _site/admin
+
+      - uses: actions/configure-pages@v4
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site/
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
