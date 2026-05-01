@@ -17,6 +17,8 @@ kotlin {
         binaries.executable()
     }
 
+    jvm()
+
     sourceSets {
         commonMain.dependencies {
             @Suppress("DEPRECATION")
@@ -29,10 +31,21 @@ kotlin {
             implementation(compose.ui)
             implementation(ktorLibs.client.core)
             implementation(ktorLibs.client.contentNegotiation)
+            implementation(ktorLibs.client.logging)
             implementation(ktorLibs.serialization.kotlinx.json)
         }
         wasmJsMain.dependencies {
             implementation(ktorLibs.client.js)
         }
+        jvmMain.dependencies {
+            implementation(compose.desktop.currentOs)
+            implementation(ktorLibs.client.cio)
+        }
+    }
+}
+
+compose.desktop {
+    application {
+        mainClass = "com.evandhardspace.movie.adminpanel.MainKt"
     }
 }

@@ -4,6 +4,7 @@ import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
@@ -16,6 +17,10 @@ class AuthService(private val supabaseUrl: String, private val anonKey: String) 
 
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) { json() }
+        install(Logging) {
+            logger = Logger.DEFAULT
+            level = LogLevel.BODY
+        }
     }
 
     private fun HttpRequestBuilder.supabaseHeaders() {
@@ -67,11 +72,15 @@ private data class SupabaseUser(val id: String, val email: String)
 
 @Serializable
 private data class SupabaseError(
+    val code: Int? = null,
     val error: String? = null,
+    @SerialName("error_code") val errorCode: String? = null,
     @SerialName("error_description") val errorDescription: String? = null,
     val msg: String? = null,
+    val message: String? = null,
+    val hint: String? = null,
 ) {
-    fun message() = errorDescription ?: msg ?: error ?: "Authentication failed"
+    fun message() = errorDescription ?: msg ?: message ?: error ?: errorCode ?: "Authentication failed"
 }
 
 @Serializable

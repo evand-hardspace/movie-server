@@ -2,3 +2,5 @@
 /build/
 /creds.md
 /.mcp.json
+/server/build/
+/.kotlin/
