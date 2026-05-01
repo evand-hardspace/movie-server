@@ -11,12 +11,13 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.util.UUID
 
 class AuthService(private val supabaseUrl: String, private val anonKey: String) {
 
     private val client = HttpClient(CIO) {
-        install(ContentNegotiation) { json() }
+        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true }) }
         install(Logging) {
             logger = Logger.DEFAULT
             level = LogLevel.BODY

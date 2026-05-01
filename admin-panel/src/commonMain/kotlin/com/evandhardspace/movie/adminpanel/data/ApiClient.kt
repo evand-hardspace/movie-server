@@ -33,6 +33,7 @@ class ApiClient(
             json(Json { ignoreUnknownKeys = true })
         }
         install(Logging) {
+            logger = Logger.SIMPLE
             level = LogLevel.BODY
         }
     }
