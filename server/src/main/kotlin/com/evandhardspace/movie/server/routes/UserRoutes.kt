@@ -37,10 +37,13 @@ fun Route.userRoutes(userService: UserService) {
 
         put("/users/{id}/role") {
             val principal = call.principal<JWTPrincipal>()!!
-            if (!userService.isSuperAdmin(principal.userId()))
+            val callerId = principal.userId()
+            if (!userService.isSuperAdmin(callerId))
                 return@put call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Super admin access required"))
             val targetId = parseUuid(call.pathParameters["id"])
                 ?: return@put call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid user ID"))
+            if (targetId == callerId)
+                return@put call.respond(HttpStatusCode.Forbidden, mapOf("error" to "Cannot change your own role"))
             val req = call.receive<UpdateRoleRequest>()
             if (userService.updateRole(targetId, req.role)) call.respond(HttpStatusCode.OK)
             else call.respond(HttpStatusCode.NotFound)

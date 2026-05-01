@@ -32,10 +32,18 @@ class AppState(
     var userRole: UserRole? by mutableStateOf(null)
         private set
 
+    var currentUserId: String? by mutableStateOf(null)
+        private set
+
     suspend fun initialize() {
         if (tokenStorage.getAccessToken() == null) return
         when (val result = userRepository.getMe()) {
-            is ApiResult.Success -> userRole = result.data.role
+            is ApiResult.Success -> {
+                val user = result.data
+                if (user.role == UserRole.USER) { onUnauthorized(); return }
+                userRole = user.role
+                currentUserId = user.id
+            }
             else -> onUnauthorized()
         }
     }
@@ -43,7 +51,15 @@ class AppState(
     suspend fun loginUser(email: String, password: String): String? {
         return when (val loginResult = authRepository.login(email, password)) {
             is ApiResult.Success -> when (val meResult = userRepository.getMe()) {
-                is ApiResult.Success -> { onLoggedIn(meResult.data.role); null }
+                is ApiResult.Success -> {
+                    val user = meResult.data
+                    if (user.role == UserRole.USER) {
+                        onUnauthorized()
+                        return "Access denied: admin privileges required"
+                    }
+                    onLoggedIn(user.role, user.id)
+                    null
+                }
                 is ApiResult.Unauthorized -> { onUnauthorized(); "Session expired, please try again" }
                 is ApiResult.Error -> meResult.message
             }
@@ -56,20 +72,23 @@ class AppState(
         currentScreen = screen
     }
 
-    fun onLoggedIn(role: UserRole) {
+    fun onLoggedIn(role: UserRole, userId: String) {
         userRole = role
+        currentUserId = userId
         currentScreen = Screen.MovieList
     }
 
     fun logout() {
         tokenStorage.clear()
         userRole = null
+        currentUserId = null
         currentScreen = Screen.Login
     }
 
     fun onUnauthorized() {
         tokenStorage.clear()
         userRole = null
+        currentUserId = null
         currentScreen = Screen.Login
     }
 }

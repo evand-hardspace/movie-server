@@ -71,6 +71,7 @@ fun UserListScreen(appState: AppState) {
                 items(users) { user ->
                     UserListItem(
                         user = user,
+                        isSelf = user.id == appState.currentUserId,
                         onRoleChange = { newRole ->
                             coroutineScope.launch {
                                 when (appState.userRepository.updateRole(user.id, newRole)) {
@@ -88,7 +89,7 @@ fun UserListScreen(appState: AppState) {
 }
 
 @Composable
-private fun UserListItem(user: User, onRoleChange: (UserRole) -> Unit) {
+private fun UserListItem(user: User, isSelf: Boolean, onRoleChange: (UserRole) -> Unit) {
     var dropdownExpanded by remember { mutableStateOf(false) }
 
     Card(
@@ -110,21 +111,24 @@ private fun UserListItem(user: User, onRoleChange: (UserRole) -> Unit) {
             )
             Box {
                 AssistChip(
-                    onClick = { dropdownExpanded = true },
+                    onClick = { if (!isSelf) dropdownExpanded = true },
                     label = { Text(user.role.name) },
+                    enabled = !isSelf,
                 )
-                DropdownMenu(
-                    expanded = dropdownExpanded,
-                    onDismissRequest = { dropdownExpanded = false },
-                ) {
-                    UserRole.entries.forEach { role ->
-                        DropdownMenuItem(
-                            text = { Text(role.name) },
-                            onClick = {
-                                dropdownExpanded = false
-                                if (role != user.role) onRoleChange(role)
-                            },
-                        )
+                if (!isSelf) {
+                    DropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false },
+                    ) {
+                        UserRole.entries.forEach { role ->
+                            DropdownMenuItem(
+                                text = { Text(role.name) },
+                                onClick = {
+                                    dropdownExpanded = false
+                                    if (role != user.role) onRoleChange(role)
+                                },
+                            )
+                        }
                     }
                 }
             }
