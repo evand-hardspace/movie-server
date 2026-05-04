@@ -93,3 +93,16 @@ internal suspend fun HttpClient.registerAndGetTokens(
 }
 
 internal fun bearerHeader(token: String) = "Bearer $token"
+
+// Registers a new user, promotes them to ADMIN, re-logs in, and returns the access token.
+// Use this in tests that need to create movies without repeating the setup boilerplate.
+internal suspend fun ApplicationTestBuilder.adminAuth(
+    email: String = "admin@example.com",
+    password: String = "password123",
+): String {
+    val tokens = client.registerAndGetTokens(email, password)
+    promoteToAdmin(extractUserId(tokens.accessToken))
+    return testJson.decodeFromString<AuthTokenResponse>(
+        client.login(email, password).bodyAsText()
+    ).accessToken
+}

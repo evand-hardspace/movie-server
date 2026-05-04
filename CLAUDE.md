@@ -43,7 +43,7 @@ Cloud Run (Ktor)
 
 **Photo upload flow:** Client requests a presigned upload URL from Supabase Storage directly, uploads the file, then sends the resulting public `photo_url` to the Ktor API. Ktor never handles binary data.
 
-**SQLite persistence on Cloud Run:** Container storage is ephemeral — data resets on every redeploy. Mount a persistent volume at `SQLITE_FILE` for production. Use `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` env vars to auto-create a super_admin on first boot.
+**SQLite persistence on Cloud Run:** Container storage is ephemeral — data resets on every redeploy. Mount a persistent volume at `SQLITE_FILE` for production. Use `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` env vars to auto-create a super_admin and seed 10 sample movies on first boot (only runs when the users/movies tables are empty).
 
 ---
 
@@ -75,7 +75,8 @@ All endpoints return `application/json`. Auth header: `Authorization: Bearer <jw
 ### Movies
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/movies` | Optional | List movies; filter via `?genre=ACTION`; includes `is_favorited` when JWT present |
+| `GET` | `/movies` | Optional | List all movies (array); filter via `?genre=ACTION` or `?filterBy=favorite` (auth required); includes `is_favorited` when JWT present |
+| `GET` | `/movies?page=1&page_size=20` | Optional | Paginated movies; same filters apply; returns `PagedMoviesResponse` object |
 | `GET` | `/movies/{id}` | Optional | Get single movie; includes `is_favorited` when JWT present |
 | `POST` | `/movies` | Admin | Create movie |
 | `PUT` | `/movies/{id}` | Admin | Update movie |
@@ -110,10 +111,22 @@ Response:
 { "refresh_token": "uuid-string" }
 ```
 
-**GET /movies response**
+**GET /movies response** (full list)
 ```json
 [{ "id": "uuid", "title": "Inception", "genre": "THRILLER", "rating": 8.8, "is_favorited": false, "created_at": "..." }]
 ```
+
+**GET /movies?page=1&page_size=20 response** (paginated)
+```json
+{
+  "items": [{ "id": "uuid", "title": "Inception", "genre": "THRILLER", "rating": 8.8, "is_favorited": false, "created_at": "..." }],
+  "page": 1,
+  "page_size": 20,
+  "total": 42,
+  "total_pages": 3
+}
+```
+`page_size` is clamped to 1–100 (default 20). `page` is 1-based.
 
 ---
 
@@ -124,7 +137,7 @@ Response:
 3. Refresh token stored in `refresh_tokens` table; revoked on use (rotation)
 4. Subsequent requests carry `Authorization: Bearer <access_token>`
 5. Roles: `USER` (default), `ADMIN` (write access to movies), `SUPER_ADMIN` (user management)
-6. First-boot seed: set `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` to auto-create a super_admin if no users exist
+6. First-boot seed: set `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` to auto-create a super_admin (if no users exist) and seed 10 sample movies (if movies table is empty)
 
 **JWT config (`application.yaml`):**
 ```yaml
@@ -149,7 +162,7 @@ movie-server/
 │       │   ├── Security.kt          # HMAC256 JWT validation
 │       │   ├── DI.kt                # Service wiring
 │       │   ├── Database.kt          # SQLite connection + SchemaUtils.create
-│       │   └── Seed.kt              # Optional super_admin seed on first boot
+│       │   └── Seed.kt              # Optional super_admin + movies seed on first boot
 │       ├── routes/
 │       │   ├── AuthRoutes.kt        # POST /auth/register, /login, /refresh
 │       │   ├── MovieRoutes.kt       # GET+POST+PUT+DELETE /movies
@@ -225,3 +238,6 @@ Separate KMP module (`admin-panel/`) targeting WASM and JVM. Architecture suppor
 | Rating scale | 0.0–10.0 NUMERIC(3,1) | Industry standard range |
 | Hosting | Cloud Run | Scales to zero; no cluster ops |
 | Admin panel | KMP WASM module in same repo | Reuses domain models; single deploy artifact |
+| Pagination | Query param `?page=` on existing `/movies` | Preserves backwards compatibility; absence of param returns full list |
+| Admin panel pagination | Infinite scroll (`LazyListState` + `derivedStateOf`) | No extra UI chrome; natural mobile/web pattern |
+| Movie seed | 10 hardcoded movies across all genres | Covers every `Genre` enum value; seeded under admin's UUID as `created_by` |

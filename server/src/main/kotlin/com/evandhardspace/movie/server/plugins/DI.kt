@@ -2,6 +2,7 @@ package com.evandhardspace.movie.server.plugins
 
 import com.evandhardspace.movie.server.domain.service.AuthService
 import com.evandhardspace.movie.server.domain.service.FavoriteService
+import com.evandhardspace.movie.server.domain.service.MovieFacade
 import com.evandhardspace.movie.server.domain.service.MovieService
 import com.evandhardspace.movie.server.domain.service.UserService
 import io.ktor.server.application.*
@@ -13,6 +14,7 @@ fun Application.configureDependencyInjection() {
         provide<AuthService> { AuthService(resolve("jwt.secret"), resolve()) }
         provide<MovieService> { MovieService() }
         provide<FavoriteService> { FavoriteService() }
+        provide<MovieFacade> { MovieFacade(resolve(), resolve()) }
     }
 }
 

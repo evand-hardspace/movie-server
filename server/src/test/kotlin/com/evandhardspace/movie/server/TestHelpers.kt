@@ -6,6 +6,7 @@ import com.evandhardspace.movie.server.domain.model.Genre
 import com.evandhardspace.movie.server.domain.model.Movie
 import com.evandhardspace.movie.server.domain.service.AuthService
 import com.evandhardspace.movie.server.domain.service.FavoriteService
+import com.evandhardspace.movie.server.domain.service.MovieFacade
 import com.evandhardspace.movie.server.domain.service.MovieService
 import com.evandhardspace.movie.server.domain.service.UserService
 import io.mockk.mockk
@@ -60,6 +61,7 @@ internal fun ApplicationTestBuilder.configureTestApp(
             provide<UserService> { userService }
             provide<MovieService> { movieService }
             provide<FavoriteService> { favoriteService }
+            provide<MovieFacade> { MovieFacade(movieService, favoriteService) }
         }
         configureRouting()
     }

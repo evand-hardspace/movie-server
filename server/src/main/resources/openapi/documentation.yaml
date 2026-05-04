@@ -5,11 +5,15 @@ info:
   description: |
     Ktor backend for managing a movie catalogue.
 
-    **Authentication:** All write operations and personalized responses (favorites) require a Supabase JWT.
-    Obtain a token via Supabase Auth (email/password), then pass it as `Authorization: Bearer <token>`.
+    **Authentication:** The server issues its own HMAC256 JWTs.
+    Obtain a token via `POST /auth/register` or `POST /auth/login`, then pass it as
+    `Authorization: Bearer <access_token>`. Access tokens expire after 1 hour; use
+    `POST /auth/refresh` to rotate them without re-authenticating.
 
-    **Admin access:** `POST /movies` and `PUT /movies/{id}` require the user to have `is_admin = true`
-    in the `users` table (set manually via the Supabase dashboard).
+    **Roles:**
+    - `USER` — default; can read movies and manage their own favorites.
+    - `ADMIN` — can create, update, and delete movies.
+    - `SUPER_ADMIN` — can manage user roles in addition to all admin capabilities.
 
 servers:
   - url: http://localhost:8080
@@ -23,7 +27,7 @@ tags:
   - name: Favorites
     description: Per-user movie favorites (requires authentication)
   - name: Users
-    description: User management (requires super_admin)
+    description: User management (requires authentication or super_admin)
 
 security: []
 
@@ -33,15 +37,15 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Supabase JWT — obtain via `supabase.auth.signInWithPassword()`
+      description: HMAC256 JWT — obtain via `POST /auth/login` or `POST /auth/register`.
 
   schemas:
     UserRole:
       type: string
       enum:
-        - user
-        - admin
-        - super_admin
+        - USER
+        - ADMIN
+        - SUPER_ADMIN
 
     UserResponse:
       type: object
@@ -106,6 +110,32 @@ components:
           default: false
           description: Present and accurate only when request is authenticated.
 
+    PagedMoviesResponse:
+      type: object
+      required: [items, page, page_size, total, total_pages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Movie'
+        page:
+          type: integer
+          minimum: 1
+          example: 1
+        page_size:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 20
+        total:
+          type: integer
+          format: int64
+          example: 42
+        total_pages:
+          type: integer
+          minimum: 1
+          example: 3
+
     MovieRequest:
       type: object
       required: [title, genre]
@@ -150,14 +180,16 @@ components:
       properties:
         access_token:
           type: string
-          description: Supabase JWT — use as Bearer token on authenticated requests.
+          description: HMAC256 JWT — use as Bearer token on authenticated requests. Expires in 1 hour.
         refresh_token:
           type: string
+          description: Opaque token valid for 30 days. Rotated on each use.
         token_type:
           type: string
-          example: "bearer"
+          example: "Bearer"
         expires_in:
           type: integer
+          description: Access token TTL in seconds.
           example: 3600
 
     RefreshRequest:
@@ -179,7 +211,7 @@ paths:
   /auth/register:
     post:
       summary: Register a new user
-      description: Creates a new account and returns tokens. The user row is automatically synced to the `users` table.
+      description: Creates a new account with `USER` role and returns a token pair.
       operationId: register
       tags: [Auth]
       requestBody:
@@ -202,7 +234,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '422':
-          description: Email already registered or password too weak.
+          description: Email already registered.
           content:
             application/json:
               schema:
@@ -211,7 +243,7 @@ paths:
   /auth/login:
     post:
       summary: Sign in
-      description: Authenticates with email and password and returns tokens. The user row is automatically synced.
+      description: Authenticates with email and password and returns a new token pair.
       operationId: login
       tags: [Auth]
       requestBody:
@@ -243,7 +275,9 @@ paths:
   /auth/refresh:
     post:
       summary: Refresh tokens
-      description: Exchanges a valid refresh token for a new token pair.
+      description: |
+        Exchanges a valid refresh token for a new token pair.
+        The submitted refresh token is immediately revoked (rotation).
       operationId: refreshToken
       tags: [Auth]
       requestBody:
@@ -260,27 +294,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuthToken'
         '401':
-          description: Refresh token is invalid or expired.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /auth/sync:
-    post:
-      summary: Sync authenticated user
-      description: |
-        Upserts the calling user's record into the `users` table using claims from the JWT.
-        Call this once after sign-in to ensure the user exists before making other authenticated requests.
-      operationId: syncUser
-      tags: [Auth]
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: User record created or updated successfully.
-        '401':
-          description: Missing or invalid JWT.
+          description: Refresh token is invalid, expired, or already revoked.
           content:
             application/json:
               schema:
@@ -290,8 +304,12 @@ paths:
     get:
       summary: List movies
       description: |
-        Returns all movies, optionally filtered by genre.
+        Returns movies, optionally filtered by genre.
         If a valid JWT is provided, each movie includes `is_favorited` reflecting the caller's status.
+
+        **Pagination:** include `page` (1-based) to receive a `PagedMoviesResponse` object instead of a plain array.
+        `page_size` defaults to 20 and is clamped to 1–100.
+        Omitting `page` returns the full unfiltered array.
       operationId: listMovies
       tags: [Movies]
       security:
@@ -304,17 +322,57 @@ paths:
           description: Filter by genre (case-sensitive enum value).
           schema:
             $ref: '#/components/schemas/Genre'
+        - name: page
+          in: query
+          required: false
+          description: 1-based page number. When present, the response is a `PagedMoviesResponse` object.
+          schema:
+            type: integer
+            minimum: 1
+            example: 1
+        - name: page_size
+          in: query
+          required: false
+          description: Number of items per page. Clamped to 1–100. Ignored when `page` is absent.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            example: 20
+        - name: filterBy
+          in: query
+          required: false
+          description: |
+            Narrows the result set. Currently supports one value:
+            - `favorite` — returns only movies that the authenticated user has favorited.
+              Requires a valid JWT; returns `401` if used without authentication.
+            Compatible with `genre`, `page`, and `page_size` filters.
+          schema:
+            type: string
+            enum: [favorite]
       responses:
         '200':
-          description: List of movies.
+          description: |
+            Movies list. Schema depends on whether `page` is provided:
+            - Without `page`: array of `Movie`
+            - With `page`: `PagedMoviesResponse` object
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Movie'
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/components/schemas/Movie'
+                  - $ref: '#/components/schemas/PagedMoviesResponse'
         '400':
           description: Invalid genre value.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: '`filterBy=favorite` was requested without a valid JWT.'
           content:
             application/json:
               schema:
@@ -322,7 +380,7 @@ paths:
 
     post:
       summary: Create movie
-      description: Creates a new movie entry. Requires a valid JWT and admin privileges.
+      description: Creates a new movie entry. Requires a valid JWT and `ADMIN` or `SUPER_ADMIN` role.
       operationId: createMovie
       tags: [Movies]
       security:
@@ -391,7 +449,7 @@ paths:
 
     put:
       summary: Update movie
-      description: Replaces all editable fields of a movie. Requires admin privileges.
+      description: Replaces all editable fields of a movie. Requires `ADMIN` or `SUPER_ADMIN` role.
       operationId: updateMovie
       tags: [Movies]
       security:
@@ -430,90 +488,16 @@ paths:
         '404':
           description: Movie not found.
 
-  /users/me:
-    get:
-      summary: Get current user
-      description: Returns the authenticated user's id, email, and role.
-      operationId: getMe
-      tags: [Users]
+    delete:
+      summary: Delete movie
+      description: Permanently removes a movie. Requires `ADMIN` or `SUPER_ADMIN` role.
+      operationId: deleteMovie
+      tags: [Movies]
       security:
         - BearerAuth: []
       responses:
-        '200':
-          description: Current user profile.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserResponse'
-        '401':
-          description: Missing or invalid JWT.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: User record not found (call /auth/sync first).
-
-  /users:
-    get:
-      summary: List all users
-      description: Returns all registered users. Requires `super_admin` privileges.
-      operationId: listUsers
-      tags: [Users]
-      security:
-        - BearerAuth: []
-      responses:
-        '200':
-          description: List of users.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/UserResponse'
-        '401':
-          description: Missing or invalid JWT.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '403':
-          description: Caller does not have super_admin privileges.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /users/{id}/role:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        description: Target user UUID.
-        schema:
-          type: string
-          format: uuid
-
-    put:
-      summary: Update user role
-      description: Sets the role of any user. Requires `super_admin` privileges.
-      operationId: updateUserRole
-      tags: [Users]
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [role]
-              properties:
-                role:
-                  $ref: '#/components/schemas/UserRole'
-      responses:
-        '200':
-          description: Role updated successfully.
+        '204':
+          description: Movie deleted successfully.
         '400':
           description: ID is not a valid UUID.
           content:
@@ -527,13 +511,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          description: Caller does not have super_admin privileges.
+          description: Authenticated user does not have admin privileges.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          description: Target user not found.
+          description: Movie not found.
 
   /movies/{id}/favorite:
     parameters:
@@ -590,3 +574,108 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+
+  /users/me:
+    get:
+      summary: Get current user
+      description: Returns the authenticated user's id, email, and role.
+      operationId: getMe
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Current user profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: User record not found.
+
+  /users:
+    get:
+      summary: List all users
+      description: Returns all registered users. Requires `SUPER_ADMIN` role.
+      operationId: listUsers
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserResponse'
+        '401':
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Caller does not have SUPER_ADMIN privileges.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/{id}/role:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Target user UUID.
+        schema:
+          type: string
+          format: uuid
+
+    put:
+      summary: Update user role
+      description: Sets the role of any user. Requires `SUPER_ADMIN` privileges.
+      operationId: updateUserRole
+      tags: [Users]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: '#/components/schemas/UserRole'
+      responses:
+        '200':
+          description: Role updated successfully.
+        '400':
+          description: ID is not a valid UUID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Missing or invalid JWT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Caller does not have SUPER_ADMIN privileges.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Target user not found.
