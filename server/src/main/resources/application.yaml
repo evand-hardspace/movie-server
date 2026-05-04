@@ -9,12 +9,8 @@ ktor:
       - com.evandhardspace.movie.server.plugins.SecurityKt.configureSecurity
       - com.evandhardspace.movie.server.plugins.DIKt.configureDependencyInjection
       - com.evandhardspace.movie.server.RoutingKt.configureRouting
+      - com.evandhardspace.movie.server.plugins.SeedKt.configureSeed
 
 jwt:
-  issuer: ${SUPABASE_JWT_ISSUER}
+  secret: ${JWT_SECRET}
   audience: "authenticated"
-  jwksUri: ${SUPABASE_JWKS_URI}
-
-supabase:
-  url: ${SUPABASE_URL}
-  anon_key: ${SUPABASE_ANON_KEY}

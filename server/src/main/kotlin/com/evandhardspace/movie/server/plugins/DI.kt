@@ -8,11 +8,10 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.di.*
 
 fun Application.configureDependencyInjection() {
-    val supabaseUrl = environment.config.property("supabase.url").getString()
-    val supabaseAnonKey = environment.config.property("supabase.anon_key").getString()
+    val jwtSecret = environment.config.property("jwt.secret").getString()
     dependencies {
-        provide<AuthService> { AuthService(supabaseUrl, supabaseAnonKey) }
         provide<UserService> { UserService() }
+        provide<AuthService> { AuthService(jwtSecret, resolve()) }
         provide<MovieService> { MovieService() }
         provide<FavoriteService> { FavoriteService() }
     }

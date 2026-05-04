@@ -10,7 +10,6 @@ import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
-import java.time.OffsetDateTime
 import java.util.UUID
 
 class FavoriteService {
@@ -22,7 +21,7 @@ class FavoriteService {
             FavoritesTable.insert {
                 it[this.userId] = EntityID(userId, UsersTable)
                 it[this.movieId] = EntityID(movieId, MoviesTable)
-                it[createdAt] = OffsetDateTime.now()
+                it[createdAt] = System.currentTimeMillis()
             }
         }
     }

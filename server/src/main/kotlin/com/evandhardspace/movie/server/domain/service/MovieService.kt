@@ -5,14 +5,13 @@ import com.evandhardspace.movie.server.domain.model.Movie
 import com.evandhardspace.movie.server.domain.table.MoviesTable
 import com.evandhardspace.movie.server.domain.table.UsersTable
 import org.jetbrains.exposed.v1.core.ResultRow
-import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
+import org.jetbrains.exposed.v1.core.eq
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import java.time.OffsetDateTime
 import java.util.UUID
 import kotlin.time.Instant
 
@@ -38,7 +37,7 @@ class MovieService {
         photoUrl: String?,
         createdBy: UUID,
     ): Movie {
-        val now = OffsetDateTime.now()
+        val now = System.currentTimeMillis()
         return transaction {
             val insertedId = MoviesTable.insertAndGetId {
                 it[this.title] = title
@@ -57,7 +56,7 @@ class MovieService {
                 genre = genre,
                 rating = rating,
                 photoUrl = photoUrl,
-                createdAt = now.toKotlinInstant(),
+                createdAt = Instant.fromEpochMilliseconds(now),
             )
         }
     }
@@ -70,7 +69,7 @@ class MovieService {
         rating: Double?,
         photoUrl: String?,
     ): Movie? = transaction {
-        val now = OffsetDateTime.now()
+        val now = System.currentTimeMillis()
         val updated = MoviesTable.update({ MoviesTable.id eq id }) {
             it[this.title] = title
             it[this.description] = description
@@ -97,9 +96,6 @@ class MovieService {
         genre = this[MoviesTable.genre],
         rating = this[MoviesTable.rating]?.toDouble(),
         photoUrl = this[MoviesTable.photoUrl],
-        createdAt = this[MoviesTable.createdAt].toKotlinInstant(),
+        createdAt = Instant.fromEpochMilliseconds(this[MoviesTable.createdAt]),
     )
 }
-
-private fun OffsetDateTime.toKotlinInstant(): Instant =
-    Instant.fromEpochMilliseconds(toInstant().toEpochMilli())

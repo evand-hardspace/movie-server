@@ -4,3 +4,5 @@
 /.mcp.json
 /server/build/
 /.kotlin/
+.env
+/server/movies.db

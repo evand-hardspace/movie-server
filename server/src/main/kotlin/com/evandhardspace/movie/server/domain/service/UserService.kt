@@ -5,21 +5,44 @@ import com.evandhardspace.movie.server.domain.model.UserRole
 import com.evandhardspace.movie.server.domain.table.UsersTable
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.jdbc.insert
 import org.jetbrains.exposed.v1.jdbc.selectAll
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 import org.jetbrains.exposed.v1.jdbc.update
-import org.jetbrains.exposed.v1.jdbc.upsert
 import java.util.UUID
 
+data class UserCredentials(
+    val id: UUID,
+    val email: String,
+    val passwordHash: String,
+    val role: UserRole,
+)
+
 class UserService {
-    fun upsertUser(userId: UUID, email: String) {
-        transaction {
-            UsersTable.upsert(onUpdateExclude = listOf(UsersTable.role, UsersTable.createdAt)) {
-                it[id] = EntityID(userId, UsersTable)
-                it[this.email] = email
-                it[role] = UserRole.USER
-            }
+    fun createUser(email: String, passwordHash: String): UUID = transaction {
+        val newId = UUID.randomUUID()
+        UsersTable.insert {
+            it[id] = EntityID(newId, UsersTable)
+            it[this.email] = email
+            it[this.passwordHash] = passwordHash
+            it[role] = UserRole.USER
+            it[createdAt] = System.currentTimeMillis()
         }
+        newId
+    }
+
+    fun findByEmail(email: String): UserCredentials? = transaction {
+        UsersTable.selectAll()
+            .where { UsersTable.email eq email }
+            .singleOrNull()
+            ?.let { row ->
+                UserCredentials(
+                    id = row[UsersTable.id].value,
+                    email = row[UsersTable.email],
+                    passwordHash = row[UsersTable.passwordHash],
+                    role = row[UsersTable.role],
+                )
+            }
     }
 
     fun isAdmin(userId: UUID): Boolean = transaction {
@@ -64,5 +87,9 @@ class UserService {
                 role = row[UsersTable.role],
             )
         }
+    }
+
+    fun hasUsers(): Boolean = transaction {
+        UsersTable.selectAll().count() > 0
     }
 }
