@@ -1,17 +1,8 @@
 # Movie Server — CLAUDE.md
 
-## Backlog Process
-
-All work is tracked in **`BACKLOG.md`** at the project root. Before starting any coding session:
-1. Check `BACKLOG.md` for the next pending `[ ]` Code task.
-2. Update its status to `[~]` when starting, `[x]` when done.
-3. If a task is blocked on a user action, mark it `[!]` and note the blocker.
-
----
-
 ## Project Overview
 
-Ktor backend for managing a movie catalogue. Features Google Sign-In via Supabase Auth, movie CRUD with photo storage, genre-based filtering, and an admin role that gates write operations.
+Ktor backend for managing a movie catalogue. Features email/password auth via Supabase, movie CRUD with photo storage, genre-based filtering, favorites, and an admin role that gates write operations.
 
 This project serves **educational purposes** as a simple Ktor backend for an Android application. The target audience is Android students learning how to build and connect a real backend.
 
@@ -21,14 +12,14 @@ This project serves **educational purposes** as a simple Ktor backend for an And
 
 | Layer | Choice | Notes |
 |---|---|---|
-| Framework | Ktor 3.4.0 (Netty) | Already scaffolded |
+| Framework | Ktor 3.4.0 (Netty) | |
 | Language | Kotlin 2.3.20, JVM 21 | |
-| Auth | Supabase Auth (Google OAuth) | Issues JWTs; Ktor validates them |
+| Auth | Supabase Auth (email/password) | Issues JWTs; Ktor validates them |
 | Database | Supabase PostgreSQL | Via JDBC + Exposed DSL |
-| ORM | JetBrains Exposed 1.2.0 | Switch from R2DBC → JDBC |
+| ORM | JetBrains Exposed 1.2.0 | JDBC |
 | Storage | Supabase Storage | Client uploads directly; Ktor stores URL |
-| DI | Koin (`ktor-server-di`) | Already wired |
-| Serialization | kotlinx.serialization | Already wired |
+| DI | Koin (`ktor-server-di`) | |
+| Serialization | kotlinx.serialization | |
 | Hosting | Google Cloud Run | Dockerized fat JAR |
 | Build | Gradle Kotlin DSL | Version catalog in `gradle/libs.versions.toml` |
 
@@ -39,25 +30,24 @@ This project serves **educational purposes** as a simple Ktor backend for an And
 ```
 Client
   │
-  ├─ 1. Google OAuth → Supabase Auth → JWT
+  ├─ 1. Email/password → Supabase Auth → JWT
   ├─ 2. Upload photo → Supabase Storage (presigned URL) → receives photo_url
   │
   ▼
 Cloud Run (Ktor)
   ├─ Validate Supabase JWT (JWKS endpoint)
-  ├─ Extract user ID + is_admin claim
+  ├─ Extract user ID + role claim
   ├─ JDBC → Supabase PostgreSQL (Exposed DSL)
   └─ Returns/persists photo_url (no binary traffic through Ktor)
 ```
 
-**Photo upload flow (Option A — client-direct):** The client requests a presigned upload URL from Supabase Storage directly, uploads the file, then sends the resulting public `photo_url` to the Ktor API. Ktor never handles binary data.
+**Photo upload flow:** Client requests a presigned upload URL from Supabase Storage directly, uploads the file, then sends the resulting public `photo_url` to the Ktor API. Ktor never handles binary data.
 
 ---
 
 ## Database Schema
 
 ```sql
--- Populated on first authenticated request (synced from Supabase auth.users)
 CREATE TABLE users (
     id         UUID PRIMARY KEY,  -- matches Supabase auth user ID
     email      TEXT NOT NULL,
@@ -83,6 +73,13 @@ CREATE TABLE movies (
 );
 
 CREATE INDEX idx_movies_genre ON movies(genre);
+
+CREATE TABLE user_favorites (
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    movie_id   UUID NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, movie_id)
+);
 ```
 
 ---
@@ -99,10 +96,23 @@ All endpoints return `application/json`. Auth header: `Authorization: Bearer <su
 ### Movies
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/movies` | Optional | List movies; filter via `?genre=ACTION` |
-| `GET` | `/movies/{id}` | Optional | Get single movie |
+| `GET` | `/movies` | Optional | List movies; filter via `?genre=ACTION`; includes `is_favorited` when JWT present |
+| `GET` | `/movies/{id}` | Optional | Get single movie; includes `is_favorited` when JWT present |
 | `POST` | `/movies` | Admin | Create movie |
 | `PUT` | `/movies/{id}` | Admin | Update movie |
+| `DELETE` | `/movies/{id}` | Admin | Delete movie |
+
+### Favorites
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/movies/{id}/favorite` | Required | Add movie to favorites |
+| `DELETE` | `/movies/{id}/favorite` | Required | Remove movie from favorites |
+
+### Users
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/users/me` | Required | Current user's id, email, role |
+| `GET` | `/users` | super_admin | List all users with id, email, role |
 
 ### Request/Response shapes
 
@@ -127,6 +137,7 @@ All endpoints return `application/json`. Auth header: `Authorization: Bearer <su
     "genre": "THRILLER",
     "rating": 8.8,
     "photo_url": "https://...",
+    "is_favorited": false,
     "created_at": "2026-04-30T10:00:00Z"
   }
 ]
@@ -136,69 +147,84 @@ All endpoints return `application/json`. Auth header: `Authorization: Bearer <su
 
 ## Auth Flow
 
-1. Client initiates Google OAuth via Supabase Auth SDK
+1. Client signs in with email/password via Supabase Auth SDK
 2. Supabase issues a JWT containing `sub` (user UUID), `email`, and app_metadata
 3. Ktor validates the JWT using Supabase's JWKS endpoint:
-   `https://<project-ref>.supabase.co/auth/v1/keys`
+   `https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1/keys`
 4. On first login, client calls `POST /auth/sync` — Ktor upserts the user row
-5. Admin role: `is_admin = true` in the `users` table; checked on each write request
+5. Roles: `is_admin = true` in `users` table for admin; `super_admin` role for user management
 
 **JWT validation config (application.yaml):**
 ```yaml
 jwt:
-  issuer: "https://<project-ref>.supabase.co/auth/v1"
+  issuer: "https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1"
   audience: "authenticated"
-  jwksUri: "https://<project-ref>.supabase.co/auth/v1/keys"
+  jwksUri: "https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1/keys"
 ```
 
 ---
 
-## Project Structure (target)
+## Project Structure
 
 ```
-src/main/kotlin/com/evandhardspace/movie/server/
-├── main.kt
-├── plugins/
-│   ├── Http.kt           # CORS, caching headers
-│   ├── Serialization.kt
-│   ├── Security.kt       # JWT validation via Supabase JWKS
-│   ├── DI.kt             # Koin modules
-│   └── Database.kt       # Exposed + PostgreSQL connection (replaces Exposed.kt)
-├── routes/
-│   ├── AuthRoutes.kt     # POST /auth/sync
-│   └── MovieRoutes.kt    # GET+POST+PUT /movies
-├── domain/
-│   ├── model/
-│   │   ├── Movie.kt
-│   │   ├── Genre.kt      # enum class Genre
-│   │   └── User.kt
-│   ├── table/
-│   │   ├── MoviesTable.kt
-│   │   └── UsersTable.kt
-│   └── service/
-│       ├── MovieService.kt
-│       └── UserService.kt
-└── util/
-    └── PrincipalExt.kt   # helpers to extract user/admin from ApplicationCall
+movie-server/
+├── server/                          # Ktor backend module
+│   └── src/main/kotlin/com/evandhardspace/movie/server/
+│       ├── main.kt
+│       ├── Routing.kt
+│       ├── plugins/
+│       │   ├── Http.kt              # CORS, caching headers
+│       │   ├── Serialization.kt
+│       │   ├── Security.kt          # JWT validation via Supabase JWKS
+│       │   ├── DI.kt                # Koin modules
+│       │   └── Database.kt          # Exposed + PostgreSQL connection
+│       ├── routes/
+│       │   ├── AuthRoutes.kt        # POST /auth/sync
+│       │   ├── MovieRoutes.kt       # GET+POST+PUT+DELETE /movies
+│       │   ├── FavoriteRoutes.kt    # POST+DELETE /movies/{id}/favorite
+│       │   └── UserRoutes.kt        # GET /users/me, GET /users
+│       ├── domain/
+│       │   ├── model/
+│       │   │   ├── Movie.kt
+│       │   │   ├── Genre.kt
+│       │   │   ├── User.kt
+│       │   │   └── UserRole.kt
+│       │   ├── table/
+│       │   │   ├── MoviesTable.kt
+│       │   │   ├── UsersTable.kt
+│       │   │   └── FavoritesTable.kt
+│       │   └── service/
+│       │       ├── MovieService.kt
+│       │       ├── UserService.kt
+│       │       ├── FavoriteService.kt
+│       │       └── AuthService.kt
+│       └── util/
+│           └── PrincipalExt.kt      # helpers to extract user/admin from ApplicationCall
+└── admin-panel/                     # KMP admin panel module (WASM + JVM targets)
+    └── src/
+        ├── commonMain/              # all UI + business logic
+        │   └── .../adminpanel/
+        │       ├── App.kt / AppState.kt / Config.kt
+        │       ├── data/            # ApiClient, AuthRepository, MovieRepository, UserRepository
+        │       ├── domain/model/    # Movie, Genre, User, UserRole
+        │       ├── screen/          # LoginScreen, MovieListScreen, MovieFormScreen, UserListScreen
+        │       └── storage/         # expect class TokenStorage
+        ├── wasmJsMain/              # actual TokenStorage (localStorage), main entry
+        └── jvmMain/                 # actual TokenStorage, main entry
 ```
 
 ---
 
-## Key Dependencies to Add
+## Admin Panel
 
-In `gradle/libs.versions.toml`:
-```toml
-postgresql = "42.7.4"
-exposed-jdbc = "1.2.0"   # replace exposed-r2dbc
-```
+Separate KMP module (`admin-panel/`) targeting WASM and JVM. Architecture supports adding Android/Desktop/iOS without restructuring.
 
-In `build.gradle.kts`:
-```kotlin
-implementation(libs.postgresql)
-implementation(libs.exposed.jdbc)   // replace exposed-r2dbc + h2 deps
-```
+**Multi-target design:**
+- All UI and business logic in `commonMain`
+- `expect class TokenStorage` — `wasmJsMain` uses `localStorage`; `jvmMain` for desktop/testing
+- Ktor client engine selected per source set
 
-Remove: `exposed-r2dbc`, `h2database-h2`, `h2database-r2dbc`
+**Screens:** Login → Movie list (FAB to add, tap to edit) → Movie form (create/edit) → User list (super_admin only, role management)
 
 ---
 
@@ -206,11 +232,11 @@ Remove: `exposed-r2dbc`, `h2database-h2`, `h2database-r2dbc`
 
 | Variable | Description |
 |---|---|
-| `DATABASE_URL` | Supabase PostgreSQL JDBC URL (`jdbc:postgresql://...`) |
-| `DATABASE_USER` | DB user (Supabase: `postgres`) |
-| `DATABASE_PASSWORD` | DB password |
-| `SUPABASE_JWT_ISSUER` | `https://<ref>.supabase.co/auth/v1` |
-| `SUPABASE_JWKS_URI` | `https://<ref>.supabase.co/auth/v1/keys` |
+| `DATABASE_URL` | `jdbc:postgresql://db.hrecjmjmncoiydjopnzc.supabase.co:5432/postgres` |
+| `DATABASE_USER` | `postgres` |
+| `DATABASE_PASSWORD` | Supabase dashboard → Settings → Database |
+| `SUPABASE_JWT_ISSUER` | `https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1` |
+| `SUPABASE_JWKS_URI` | `https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1/keys` |
 | `GCP_PROJECT_ID` | Google Cloud project ID — stored on device only, never committed |
 
 ---
@@ -220,7 +246,7 @@ Remove: `exposed-r2dbc`, `h2database-h2`, `h2database-r2dbc`
 - **Containerize:** `./gradlew buildFatJar` → `Dockerfile` FROM `eclipse-temurin:21-jre`
 - **Registry:** Google Artifact Registry — `us-central1-docker.pkg.dev/$GCP_PROJECT_ID/movie-server`
 - **Deploy:** `gcloud run deploy movie-server --image us-central1-docker.pkg.dev/$GCP_PROJECT_ID/movie-server/movie-server:latest --region us-central1`
-- **CI:** GitHub Actions → build → push → deploy
+- **CI:** GitHub Actions → build → push → deploy (`workflow_dispatch`)
 
 ---
 
@@ -228,10 +254,11 @@ Remove: `exposed-r2dbc`, `h2database-h2`, `h2database-r2dbc`
 
 | Decision | Choice | Reason |
 |---|---|---|
-| Auth provider | Supabase Auth | Same vendor as DB; handles OAuth flow + JWT issuance |
+| Auth provider | Supabase Auth (email/password) | Same vendor as DB; handles auth flow + JWT issuance |
 | Photo upload | Client → Supabase Storage directly | Keeps Ktor stateless; no binary traffic |
 | Genre | Kotlin enum + PostgreSQL ENUM | Fixed set; type-safe filtering |
-| DB access | Exposed DSL over JDBC | Idiomatic Kotlin; sync JDBC simpler than R2DBC for this use case |
+| DB access | Exposed DSL over JDBC | Idiomatic Kotlin; sync JDBC simpler than R2DBC |
 | Rating scale | 0.0–10.0 NUMERIC(3,1) | Industry standard range |
-| Admin grant | Manual via Supabase dashboard (`is_admin` flag) | Simple for MVP; no promotion endpoint needed yet |
+| Admin grant | Manual via Supabase dashboard (`is_admin` flag) | Simple for MVP; no promotion endpoint needed |
 | Hosting | Cloud Run | Scales to zero; no cluster ops; fits containerized Ktor |
+| Admin panel | KMP WASM module in same repo | Reuses domain models; single deploy artifact |
