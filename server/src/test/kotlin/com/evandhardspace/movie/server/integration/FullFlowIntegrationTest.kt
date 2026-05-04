@@ -316,6 +316,29 @@ class FullFlowIntegrationTest {
     }
 
     @Test
+    fun `GET movies beyond last page returns empty items with correct totals`() = integrationTest {
+        val auth = bearerHeader(adminAuth())
+
+        repeat(3) { i ->
+            client.post("/movies") {
+                header(HttpHeaders.Authorization, auth)
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Movie $i","genre":"ACTION"}""")
+            }
+        }
+
+        val response = client.get("/movies?page=2&page_size=20")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val paged = testJson.decodeFromString<PagedMoviesPayload>(response.bodyAsText())
+        assertEquals(2, paged.page)
+        assertEquals(20, paged.pageSize)
+        assertEquals(3L, paged.total)
+        assertEquals(1, paged.totalPages)
+        assertTrue(paged.items.isEmpty())
+    }
+
+    @Test
     fun `GET movies paginated with genre filter returns only matching movies`() = integrationTest {
         val auth = bearerHeader(adminAuth())
 
@@ -436,16 +459,16 @@ class FullFlowIntegrationTest {
 
     // endregion
 
-    // region only_favorites filter
+    // region filterBy=favorite filter
 
     @Test
-    fun `GET movies with only_favorites without auth returns 401`() = integrationTest {
-        val response = client.get("/movies?only_favorites=true")
+    fun `GET movies with filterBy=favorite without auth returns 401`() = integrationTest {
+        val response = client.get("/movies?filterBy=favorite")
         assertEquals(HttpStatusCode.Unauthorized, response.status)
     }
 
     @Test
-    fun `GET movies with only_favorites returns empty when user has no favorites`() = integrationTest {
+    fun `GET movies with filterBy=favorite returns empty when user has no favorites`() = integrationTest {
         val auth = bearerHeader(adminAuth())
         client.post("/movies") {
             header(HttpHeaders.Authorization, auth)
@@ -454,7 +477,7 @@ class FullFlowIntegrationTest {
         }
 
         val userTokens = client.registerAndGetTokens("user@example.com")
-        val response = client.get("/movies?only_favorites=true") {
+        val response = client.get("/movies?filterBy=favorite") {
             header(HttpHeaders.Authorization, bearerHeader(userTokens.accessToken))
         }
 
@@ -463,7 +486,7 @@ class FullFlowIntegrationTest {
     }
 
     @Test
-    fun `GET movies with only_favorites returns only favorited movies`() = integrationTest {
+    fun `GET movies with filterBy=favorite returns only favorited movies`() = integrationTest {
         val auth = bearerHeader(adminAuth())
         val favMovie = testJson.decodeFromString<MoviePayload>(
             client.post("/movies") {
@@ -482,7 +505,7 @@ class FullFlowIntegrationTest {
         val userAuth = bearerHeader(userTokens.accessToken)
         client.post("/movies/${favMovie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
 
-        val response = client.get("/movies?only_favorites=true") {
+        val response = client.get("/movies?filterBy=favorite") {
             header(HttpHeaders.Authorization, userAuth)
         }
 
@@ -494,7 +517,7 @@ class FullFlowIntegrationTest {
     }
 
     @Test
-    fun `GET movies with only_favorites and genre returns intersection`() = integrationTest {
+    fun `GET movies with filterBy=favorite and genre returns intersection`() = integrationTest {
         val auth = bearerHeader(adminAuth())
         val actionMovie = testJson.decodeFromString<MoviePayload>(
             client.post("/movies") {
@@ -516,7 +539,7 @@ class FullFlowIntegrationTest {
         client.post("/movies/${actionMovie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
         client.post("/movies/${dramaMovie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
 
-        val response = client.get("/movies?only_favorites=true&genre=ACTION") {
+        val response = client.get("/movies?filterBy=favorite&genre=ACTION") {
             header(HttpHeaders.Authorization, userAuth)
         }
 
@@ -527,7 +550,7 @@ class FullFlowIntegrationTest {
     }
 
     @Test
-    fun `GET movies paginated with only_favorites returns PagedMoviesResponse with only favorites`() = integrationTest {
+    fun `GET movies paginated with filterBy=favorite returns PagedMoviesResponse with only favorites`() = integrationTest {
         val auth = bearerHeader(adminAuth())
         val favMovie = testJson.decodeFromString<MoviePayload>(
             client.post("/movies") {
@@ -546,7 +569,7 @@ class FullFlowIntegrationTest {
         val userAuth = bearerHeader(userTokens.accessToken)
         client.post("/movies/${favMovie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
 
-        val response = client.get("/movies?page=1&only_favorites=true") {
+        val response = client.get("/movies?page=1&filterBy=favorite") {
             header(HttpHeaders.Authorization, userAuth)
         }
 
@@ -559,7 +582,7 @@ class FullFlowIntegrationTest {
     }
 
     @Test
-    fun `GET movies with only_favorites after removing favorite no longer returns movie`() = integrationTest {
+    fun `GET movies with filterBy=favorite after removing favorite no longer returns movie`() = integrationTest {
         val auth = bearerHeader(adminAuth())
         val movie = testJson.decodeFromString<MoviePayload>(
             client.post("/movies") {
@@ -574,7 +597,7 @@ class FullFlowIntegrationTest {
         client.post("/movies/${movie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
         client.delete("/movies/${movie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
 
-        val response = client.get("/movies?only_favorites=true") {
+        val response = client.get("/movies?filterBy=favorite") {
             header(HttpHeaders.Authorization, userAuth)
         }
 

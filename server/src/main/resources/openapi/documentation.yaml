@@ -340,16 +340,17 @@ paths:
             maximum: 100
             default: 20
             example: 20
-        - name: only_favorites
+        - name: filterBy
           in: query
           required: false
           description: |
-            When `true`, returns only movies that the authenticated user has favorited.
-            Requires a valid JWT — returns `401` if used without authentication.
+            Narrows the result set. Currently supports one value:
+            - `favorite` — returns only movies that the authenticated user has favorited.
+              Requires a valid JWT; returns `401` if used without authentication.
             Compatible with `genre`, `page`, and `page_size` filters.
           schema:
-            type: boolean
-            default: false
+            type: string
+            enum: [favorite]
       responses:
         '200':
           description: |
@@ -371,7 +372,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '401':
-          description: '`only_favorites=true` was requested without a valid JWT.'
+          description: '`filterBy=favorite` was requested without a valid JWT.'
           content:
             application/json:
               schema:

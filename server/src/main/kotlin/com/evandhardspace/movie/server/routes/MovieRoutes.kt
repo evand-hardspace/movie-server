@@ -2,8 +2,7 @@ package com.evandhardspace.movie.server.routes
 
 import com.evandhardspace.movie.server.domain.model.Genre
 import com.evandhardspace.movie.server.domain.model.Movie
-import com.evandhardspace.movie.server.domain.service.FavoriteService
-import com.evandhardspace.movie.server.domain.service.MovieService
+import com.evandhardspace.movie.server.domain.service.MovieFacade
 import com.evandhardspace.movie.server.domain.service.PagedMovies
 import com.evandhardspace.movie.server.domain.service.UserService
 import com.evandhardspace.movie.server.util.userId
@@ -35,43 +34,56 @@ data class PagedMoviesResponse(
     @SerialName("total_pages") val totalPages: Int,
 )
 
-private fun PagedMovies.toResponse(items: List<Movie> = this.items) =
-    PagedMoviesResponse(items, page, pageSize, total, totalPages)
+private data class MovieListParams(
+    val genre: Genre?,
+    val onlyFavorites: Boolean,
+    val page: Int?,
+    val pageSize: Int,
+)
 
-fun Route.movieRoutes(movieService: MovieService, userService: UserService, favoriteService: FavoriteService) {
+private fun Parameters.parseMovieListParams(): Result<MovieListParams> {
+    val genreParam = get("genre")
+    val genre = if (genreParam != null) {
+        runCatching { Genre.valueOf(genreParam) }.getOrElse {
+            return Result.failure(IllegalArgumentException("Invalid genre: $genreParam"))
+        }
+    } else null
+    return Result.success(
+        MovieListParams(
+            genre = genre,
+            onlyFavorites = get("filterBy") == "favorite",
+            page = get("page")?.toIntOrNull()?.coerceAtLeast(1),
+            pageSize = get("page_size")?.toIntOrNull()?.coerceIn(1, 100) ?: 20,
+        )
+    )
+}
+
+private fun PagedMovies.toResponse() = PagedMoviesResponse(items, page, pageSize, total, totalPages)
+
+private suspend fun RoutingCall.requireAdminId(userService: UserService): UUID? {
+    val userId = principal<JWTPrincipal>()!!.userId()
+    return if (userService.isAdmin(userId)) userId
+    else { respond(HttpStatusCode.Forbidden); null }
+}
+
+fun Route.movieRoutes(facade: MovieFacade, userService: UserService) {
     authenticate("auth-jwt", optional = true) {
         get("/movies") {
-            val genreParam = call.request.queryParameters["genre"]
-            val genre = if (genreParam != null) {
-                try { Genre.valueOf(genreParam) } catch (e: IllegalArgumentException) {
-                    return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid genre: $genreParam"))
-                }
-            } else null
-            val principal = call.principal<JWTPrincipal>()
-            val onlyFavorites = call.request.queryParameters["only_favorites"] == "true"
-            if (onlyFavorites && principal == null) {
-                return@get call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Authentication required for favorites filter"))
+            val params = call.request.queryParameters.parseMovieListParams().getOrElse { e ->
+                return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to e.message))
             }
-            val favIds = if (principal != null) favoriteService.getFavoritedMovieIds(principal.userId()) else null
-            val filterIds = if (onlyFavorites) favIds else null
-
-            val pageParam = call.request.queryParameters["page"]?.toIntOrNull()
-            if (pageParam != null) {
-                val pageSize = call.request.queryParameters["page_size"]?.toIntOrNull()?.coerceIn(1, 100) ?: 20
-                val page = pageParam.coerceAtLeast(1)
-                val paged = movieService.getMoviesPaged(genre, page, pageSize, filterIds)
-                if (favIds != null) {
-                    call.respond(paged.toResponse(paged.items.map { it.copy(isFavorited = UUID.fromString(it.id) in favIds) }))
-                } else {
-                    call.respond(paged.toResponse())
-                }
+            val principal = call.principal<JWTPrincipal>()
+            if (params.onlyFavorites && principal == null) {
+                return@get call.respond(
+                    HttpStatusCode.Unauthorized,
+                    mapOf("error" to "Authentication required for favorites filter"),
+                )
+            }
+            val userId = principal?.userId()
+            if (params.page != null) {
+                call.respond(facade.getMoviesPaged(params.genre, params.page, params.pageSize, userId, params.onlyFavorites).toResponse())
             } else {
-                val movies = movieService.getMovies(genre, filterIds)
-                if (favIds != null) {
-                    call.respond(movies.map { it.copy(isFavorited = UUID.fromString(it.id) in favIds) })
-                } else {
-                    call.respond(movies)
-                }
+                call.respond(facade.getMovies(params.genre, userId, params.onlyFavorites))
             }
         }
 
@@ -79,61 +91,38 @@ fun Route.movieRoutes(movieService: MovieService, userService: UserService, favo
             val id = parseUuid(call.pathParameters["id"]) ?: return@get call.respond(
                 HttpStatusCode.BadRequest, mapOf("error" to "Invalid movie ID")
             )
-            val movie = movieService.getMovieById(id) ?: return@get call.respond(HttpStatusCode.NotFound)
-            val principal = call.principal<JWTPrincipal>()
-            if (principal != null) {
-                call.respond(movie.copy(isFavorited = favoriteService.isFavorited(principal.userId(), id)))
-            } else {
-                call.respond(movie)
-            }
+            val movie = facade.getMovieById(id, call.principal<JWTPrincipal>()?.userId())
+                ?: return@get call.respond(HttpStatusCode.NotFound)
+            call.respond(movie)
         }
     }
 
     authenticate("auth-jwt") {
         post("/movies") {
-            val principal = call.principal<JWTPrincipal>()!!
-            val userId = principal.userId()
-            if (!userService.isAdmin(userId)) return@post call.respond(HttpStatusCode.Forbidden)
+            val userId = call.requireAdminId(userService) ?: return@post
             val request = call.receive<MovieRequest>()
-            val movie = movieService.createMovie(
-                title = request.title,
-                description = request.description,
-                genre = request.genre,
-                rating = request.rating,
-                photoUrl = request.photoUrl,
-                createdBy = userId,
+            call.respond(
+                HttpStatusCode.Created,
+                facade.createMovie(request.title, request.description, request.genre, request.rating, request.photoUrl, userId),
             )
-            call.respond(HttpStatusCode.Created, movie)
         }
 
         put("/movies/{id}") {
-            val principal = call.principal<JWTPrincipal>()!!
-            val userId = principal.userId()
-            if (!userService.isAdmin(userId)) return@put call.respond(HttpStatusCode.Forbidden)
+            call.requireAdminId(userService) ?: return@put
             val id = parseUuid(call.pathParameters["id"]) ?: return@put call.respond(
                 HttpStatusCode.BadRequest, mapOf("error" to "Invalid movie ID")
             )
             val request = call.receive<MovieRequest>()
-            val movie = movieService.updateMovie(
-                id = id,
-                title = request.title,
-                description = request.description,
-                genre = request.genre,
-                rating = request.rating,
-                photoUrl = request.photoUrl,
-            )
+            val movie = facade.updateMovie(id, request.title, request.description, request.genre, request.rating, request.photoUrl)
             if (movie != null) call.respond(movie) else call.respond(HttpStatusCode.NotFound)
         }
 
         delete("/movies/{id}") {
-            val principal = call.principal<JWTPrincipal>()!!
-            val userId = principal.userId()
-            if (!userService.isAdmin(userId)) return@delete call.respond(HttpStatusCode.Forbidden)
+            call.requireAdminId(userService) ?: return@delete
             val id = parseUuid(call.pathParameters["id"]) ?: return@delete call.respond(
                 HttpStatusCode.BadRequest, mapOf("error" to "Invalid movie ID")
             )
-            val deleted = movieService.deleteMovie(id)
-            if (deleted) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound)
+            if (facade.deleteMovie(id)) call.respond(HttpStatusCode.NoContent) else call.respond(HttpStatusCode.NotFound)
         }
     }
 }

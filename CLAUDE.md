@@ -75,7 +75,7 @@ All endpoints return `application/json`. Auth header: `Authorization: Bearer <jw
 ### Movies
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/movies` | Optional | List all movies (array); filter via `?genre=ACTION`; includes `is_favorited` when JWT present |
+| `GET` | `/movies` | Optional | List all movies (array); filter via `?genre=ACTION` or `?filterBy=favorite` (auth required); includes `is_favorited` when JWT present |
 | `GET` | `/movies?page=1&page_size=20` | Optional | Paginated movies; same filters apply; returns `PagedMoviesResponse` object |
 | `GET` | `/movies/{id}` | Optional | Get single movie; includes `is_favorited` when JWT present |
 | `POST` | `/movies` | Admin | Create movie |
