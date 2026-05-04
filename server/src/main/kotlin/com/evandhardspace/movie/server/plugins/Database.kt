@@ -9,11 +9,11 @@ import org.jetbrains.exposed.v1.jdbc.Database
 import org.jetbrains.exposed.v1.jdbc.SchemaUtils
 import org.jetbrains.exposed.v1.jdbc.transactions.transaction
 
-fun Application.configureDatabase() {
-    val path = System.getenv("SQLITE_FILE") ?: "./movies.db"
-
+fun Application.configureDatabase(
+    url: String = "jdbc:sqlite:${System.getenv("SQLITE_FILE") ?: "./movies.db"}",
+) {
     Database.connect(
-        url = "jdbc:sqlite:$path",
+        url = url,
         driver = "org.sqlite.JDBC",
     )
 
