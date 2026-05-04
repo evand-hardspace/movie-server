@@ -436,6 +436,154 @@ class FullFlowIntegrationTest {
 
     // endregion
 
+    // region only_favorites filter
+
+    @Test
+    fun `GET movies with only_favorites without auth returns 401`() = integrationTest {
+        val response = client.get("/movies?only_favorites=true")
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun `GET movies with only_favorites returns empty when user has no favorites`() = integrationTest {
+        val auth = bearerHeader(adminAuth())
+        client.post("/movies") {
+            header(HttpHeaders.Authorization, auth)
+            contentType(ContentType.Application.Json)
+            setBody("""{"title":"Some Movie","genre":"ACTION"}""")
+        }
+
+        val userTokens = client.registerAndGetTokens("user@example.com")
+        val response = client.get("/movies?only_favorites=true") {
+            header(HttpHeaders.Authorization, bearerHeader(userTokens.accessToken))
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("[]", response.bodyAsText().trim())
+    }
+
+    @Test
+    fun `GET movies with only_favorites returns only favorited movies`() = integrationTest {
+        val auth = bearerHeader(adminAuth())
+        val favMovie = testJson.decodeFromString<MoviePayload>(
+            client.post("/movies") {
+                header(HttpHeaders.Authorization, auth)
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Favorited","genre":"ACTION"}""")
+            }.bodyAsText()
+        )
+        client.post("/movies") {
+            header(HttpHeaders.Authorization, auth)
+            contentType(ContentType.Application.Json)
+            setBody("""{"title":"Not Favorited","genre":"DRAMA"}""")
+        }
+
+        val userTokens = client.registerAndGetTokens("user@example.com")
+        val userAuth = bearerHeader(userTokens.accessToken)
+        client.post("/movies/${favMovie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
+
+        val response = client.get("/movies?only_favorites=true") {
+            header(HttpHeaders.Authorization, userAuth)
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("Favorited"))
+        assertFalse(body.contains("Not Favorited"))
+        assertTrue(body.contains("\"is_favorited\":true"))
+    }
+
+    @Test
+    fun `GET movies with only_favorites and genre returns intersection`() = integrationTest {
+        val auth = bearerHeader(adminAuth())
+        val actionMovie = testJson.decodeFromString<MoviePayload>(
+            client.post("/movies") {
+                header(HttpHeaders.Authorization, auth)
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Action Fav","genre":"ACTION"}""")
+            }.bodyAsText()
+        )
+        val dramaMovie = testJson.decodeFromString<MoviePayload>(
+            client.post("/movies") {
+                header(HttpHeaders.Authorization, auth)
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Drama Fav","genre":"DRAMA"}""")
+            }.bodyAsText()
+        )
+
+        val userTokens = client.registerAndGetTokens("user@example.com")
+        val userAuth = bearerHeader(userTokens.accessToken)
+        client.post("/movies/${actionMovie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
+        client.post("/movies/${dramaMovie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
+
+        val response = client.get("/movies?only_favorites=true&genre=ACTION") {
+            header(HttpHeaders.Authorization, userAuth)
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("Action Fav"))
+        assertFalse(body.contains("Drama Fav"))
+    }
+
+    @Test
+    fun `GET movies paginated with only_favorites returns PagedMoviesResponse with only favorites`() = integrationTest {
+        val auth = bearerHeader(adminAuth())
+        val favMovie = testJson.decodeFromString<MoviePayload>(
+            client.post("/movies") {
+                header(HttpHeaders.Authorization, auth)
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Fav Movie","genre":"THRILLER"}""")
+            }.bodyAsText()
+        )
+        client.post("/movies") {
+            header(HttpHeaders.Authorization, auth)
+            contentType(ContentType.Application.Json)
+            setBody("""{"title":"Not Fav","genre":"DRAMA"}""")
+        }
+
+        val userTokens = client.registerAndGetTokens("user@example.com")
+        val userAuth = bearerHeader(userTokens.accessToken)
+        client.post("/movies/${favMovie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
+
+        val response = client.get("/movies?page=1&only_favorites=true") {
+            header(HttpHeaders.Authorization, userAuth)
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val paged = testJson.decodeFromString<PagedMoviesPayload>(response.bodyAsText())
+        assertEquals(1L, paged.total)
+        assertEquals(1, paged.items.size)
+        assertEquals("Fav Movie", paged.items.first().title)
+        assertTrue(response.bodyAsText().contains("\"is_favorited\":true"))
+    }
+
+    @Test
+    fun `GET movies with only_favorites after removing favorite no longer returns movie`() = integrationTest {
+        val auth = bearerHeader(adminAuth())
+        val movie = testJson.decodeFromString<MoviePayload>(
+            client.post("/movies") {
+                header(HttpHeaders.Authorization, auth)
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Was Fav","genre":"COMEDY"}""")
+            }.bodyAsText()
+        )
+
+        val userTokens = client.registerAndGetTokens("user@example.com")
+        val userAuth = bearerHeader(userTokens.accessToken)
+        client.post("/movies/${movie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
+        client.delete("/movies/${movie.id}/favorite") { header(HttpHeaders.Authorization, userAuth) }
+
+        val response = client.get("/movies?only_favorites=true") {
+            header(HttpHeaders.Authorization, userAuth)
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("[]", response.bodyAsText().trim())
+    }
+
+    // endregion
+
     // region User management
 
     @Test

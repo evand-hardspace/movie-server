@@ -48,21 +48,26 @@ fun Route.movieRoutes(movieService: MovieService, userService: UserService, favo
                 }
             } else null
             val principal = call.principal<JWTPrincipal>()
+            val onlyFavorites = call.request.queryParameters["only_favorites"] == "true"
+            if (onlyFavorites && principal == null) {
+                return@get call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Authentication required for favorites filter"))
+            }
+            val favIds = if (principal != null) favoriteService.getFavoritedMovieIds(principal.userId()) else null
+            val filterIds = if (onlyFavorites) favIds else null
+
             val pageParam = call.request.queryParameters["page"]?.toIntOrNull()
             if (pageParam != null) {
                 val pageSize = call.request.queryParameters["page_size"]?.toIntOrNull()?.coerceIn(1, 100) ?: 20
                 val page = pageParam.coerceAtLeast(1)
-                val paged = movieService.getMoviesPaged(genre, page, pageSize)
-                if (principal != null) {
-                    val favIds = favoriteService.getFavoritedMovieIds(principal.userId())
+                val paged = movieService.getMoviesPaged(genre, page, pageSize, filterIds)
+                if (favIds != null) {
                     call.respond(paged.toResponse(paged.items.map { it.copy(isFavorited = UUID.fromString(it.id) in favIds) }))
                 } else {
                     call.respond(paged.toResponse())
                 }
             } else {
-                val movies = movieService.getMovies(genre)
-                if (principal != null) {
-                    val favIds = favoriteService.getFavoritedMovieIds(principal.userId())
+                val movies = movieService.getMovies(genre, filterIds)
+                if (favIds != null) {
                     call.respond(movies.map { it.copy(isFavorited = UUID.fromString(it.id) in favIds) })
                 } else {
                     call.respond(movies)

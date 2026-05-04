@@ -5,8 +5,10 @@ import com.evandhardspace.movie.server.domain.model.Movie
 import com.evandhardspace.movie.server.domain.table.MoviesTable
 import com.evandhardspace.movie.server.domain.table.UsersTable
 import org.jetbrains.exposed.v1.core.ResultRow
+import org.jetbrains.exposed.v1.core.and
 import org.jetbrains.exposed.v1.core.dao.id.EntityID
 import org.jetbrains.exposed.v1.core.eq
+import org.jetbrains.exposed.v1.core.inList
 import org.jetbrains.exposed.v1.jdbc.deleteWhere
 import org.jetbrains.exposed.v1.jdbc.insertAndGetId
 import org.jetbrains.exposed.v1.jdbc.selectAll
@@ -16,9 +18,18 @@ import java.util.UUID
 import kotlin.time.Instant
 
 class MovieService {
-    fun getMovies(genre: Genre?): List<Movie> = transaction {
+    fun getMovies(genre: Genre?, movieIds: Set<UUID>? = null): List<Movie> = transaction {
+        if (movieIds != null && movieIds.isEmpty()) return@transaction emptyList()
+        val entityIds = movieIds?.map { EntityID(it, MoviesTable) }
         MoviesTable.selectAll()
-            .let { if (genre != null) it.where { MoviesTable.genre eq genre } else it }
+            .let { q ->
+                when {
+                    genre != null && entityIds != null -> q.where { (MoviesTable.genre eq genre) and (MoviesTable.id inList entityIds) }
+                    genre != null -> q.where { MoviesTable.genre eq genre }
+                    entityIds != null -> q.where { MoviesTable.id inList entityIds }
+                    else -> q
+                }
+            }
             .map { it.toMovie() }
     }
 
@@ -93,21 +104,32 @@ class MovieService {
         MoviesTable.selectAll().count() > 0
     }
 
-    fun getMoviesPaged(genre: Genre?, page: Int, pageSize: Int): PagedMovies = transaction {
-        val base = MoviesTable.selectAll()
-            .let { if (genre != null) it.where { MoviesTable.genre eq genre } else it }
-        val total = base.count()
-        val items = base
-            .limit(pageSize)
-            .offset((page - 1).toLong() * pageSize)
-            .map { it.toMovie() }
-        PagedMovies(
-            items = items,
-            page = page,
-            pageSize = pageSize,
-            total = total,
-            totalPages = ((total + pageSize - 1) / pageSize).toInt().coerceAtLeast(1),
-        )
+    fun getMoviesPaged(genre: Genre?, page: Int, pageSize: Int, movieIds: Set<UUID>? = null): PagedMovies {
+        if (movieIds != null && movieIds.isEmpty()) return PagedMovies(emptyList(), page, pageSize, 0L, 1)
+        return transaction {
+            val entityIds = movieIds?.map { EntityID(it, MoviesTable) }
+            val base = MoviesTable.selectAll()
+                .let { q ->
+                    when {
+                        genre != null && entityIds != null -> q.where { (MoviesTable.genre eq genre) and (MoviesTable.id inList entityIds) }
+                        genre != null -> q.where { MoviesTable.genre eq genre }
+                        entityIds != null -> q.where { MoviesTable.id inList entityIds }
+                        else -> q
+                    }
+                }
+            val total = base.count()
+            val items = base
+                .limit(pageSize)
+                .offset((page - 1).toLong() * pageSize)
+                .map { it.toMovie() }
+            PagedMovies(
+                items = items,
+                page = page,
+                pageSize = pageSize,
+                total = total,
+                totalPages = ((total + pageSize - 1) / pageSize).toInt().coerceAtLeast(1),
+            )
+        }
     }
 
     private fun ResultRow.toMovie() = Movie(

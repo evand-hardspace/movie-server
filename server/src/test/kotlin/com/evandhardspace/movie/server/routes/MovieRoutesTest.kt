@@ -335,4 +335,78 @@ class MovieRoutesTest {
     }
 
     // endregion
+
+    // region GET /movies only_favorites filter
+
+    @Test
+    fun `GET movies with only_favorites without JWT returns 401`() = routeTest {
+        val response = client.get("/movies?only_favorites=true")
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun `GET movies with only_favorites returns favorited movies with is_favorited true`() = routeTest {
+        val userId = UUID.randomUUID()
+        val movieId = UUID.randomUUID()
+        val favIds = setOf(movieId)
+        every { favoriteService.getFavoritedMovieIds(userId) } returns favIds
+        every { movieService.getMovies(null, favIds) } returns listOf(testMovie(movieId))
+
+        val response = client.get("/movies?only_favorites=true") {
+            header(HttpHeaders.Authorization, "Bearer ${createTestToken(userId)}")
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"is_favorited\":true"))
+        verify { movieService.getMovies(null, favIds) }
+    }
+
+    @Test
+    fun `GET movies with only_favorites and genre passes both filters to service`() = routeTest {
+        val userId = UUID.randomUUID()
+        val movieId = UUID.randomUUID()
+        val favIds = setOf(movieId)
+        every { favoriteService.getFavoritedMovieIds(userId) } returns favIds
+        every { movieService.getMovies(Genre.ACTION, favIds) } returns listOf(testMovie(movieId))
+
+        val response = client.get("/movies?only_favorites=true&genre=ACTION") {
+            header(HttpHeaders.Authorization, "Bearer ${createTestToken(userId)}")
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        verify { movieService.getMovies(Genre.ACTION, favIds) }
+    }
+
+    @Test
+    fun `GET movies with only_favorites when user has no favorites returns empty list`() = routeTest {
+        val userId = UUID.randomUUID()
+        every { favoriteService.getFavoritedMovieIds(userId) } returns emptySet()
+        every { movieService.getMovies(null, emptySet()) } returns emptyList()
+
+        val response = client.get("/movies?only_favorites=true") {
+            header(HttpHeaders.Authorization, "Bearer ${createTestToken(userId)}")
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertEquals("[]", response.bodyAsText().trim())
+    }
+
+    @Test
+    fun `GET movies paginated with only_favorites passes favIds to service`() = routeTest {
+        val userId = UUID.randomUUID()
+        val movieId = UUID.randomUUID()
+        val favIds = setOf(movieId)
+        every { favoriteService.getFavoritedMovieIds(userId) } returns favIds
+        every { movieService.getMoviesPaged(null, 1, 20, favIds) } returns pagedResult(movieId)
+
+        val response = client.get("/movies?page=1&only_favorites=true") {
+            header(HttpHeaders.Authorization, "Bearer ${createTestToken(userId)}")
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"is_favorited\":true"))
+        verify { movieService.getMoviesPaged(null, 1, 20, favIds) }
+    }
+
+    // endregion
 }
