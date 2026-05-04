@@ -58,6 +58,7 @@ jobs:
       - name: Deploy to Cloud Run
         env:
           IMAGE: us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/movie-server/movie-server:${{ github.sha }}
+          BUCKET: ${{ secrets.GCP_PROJECT_ID }}-movie-db
         run: |
           gcloud run deploy movie-server \
             --image "$IMAGE" \
@@ -65,6 +66,10 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --port 8080 \
+            --execution-environment=gen2 \
+            --max-instances=1 \
+            --add-volume="name=db,type=cloud-storage,bucket=$BUCKET" \
+            --add-volume-mount="volume=db,mount-path=/data" \
             --set-env-vars="JWT_SECRET=${{ secrets.JWT_SECRET }},SQLITE_FILE=/data/movies.db,SEED_ADMIN_EMAIL=${{ secrets.SEED_ADMIN_EMAIL }},SEED_ADMIN_PASSWORD=${{ secrets.SEED_ADMIN_PASSWORD }}" \
             --project="${{ secrets.GCP_PROJECT_ID }}"
 
