@@ -1,6 +1,7 @@
 package com.evandhardspace.movie.server.integration
 
 import com.auth0.jwt.JWT
+import com.evandhardspace.movie.server.TEST_JWT_SECRET
 import com.evandhardspace.movie.server.configureRouting
 import com.evandhardspace.movie.server.domain.model.UserRole
 import com.evandhardspace.movie.server.domain.service.AuthTokenResponse
@@ -13,7 +14,9 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import io.ktor.server.application.Application
 import io.ktor.server.config.*
+import io.ktor.server.plugins.di.dependencies
 import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
 import java.nio.file.Files
@@ -37,16 +40,24 @@ internal fun integrationTest(block: suspend ApplicationTestBuilder.() -> Unit) {
                 )
             }
             application {
+                configureDependencyInjection()
+                configureTestVariables()
                 configureDatabase("jdbc:sqlite:${tmpFile.toAbsolutePath()}")
                 configureSerialization()
                 configureSecurity()
-                configureDependencyInjection()
                 configureRouting()
             }
             block()
         }
     } finally {
         Files.deleteIfExists(tmpFile)
+    }
+}
+
+private fun Application.configureTestVariables() {
+    dependencies {
+        provide("jwt.secret") { TEST_JWT_SECRET }
+        provide("jwt.audience") { "authenticated" }
     }
 }
 

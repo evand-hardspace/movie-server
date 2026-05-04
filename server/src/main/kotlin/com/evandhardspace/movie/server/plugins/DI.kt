@@ -8,11 +8,18 @@ import io.ktor.server.application.*
 import io.ktor.server.plugins.di.*
 
 fun Application.configureDependencyInjection() {
-    val jwtSecret = environment.config.property("jwt.secret").getString()
     dependencies {
         provide<UserService> { UserService() }
-        provide<AuthService> { AuthService(jwtSecret, resolve()) }
+        provide<AuthService> { AuthService(resolve("jwt.secret"), resolve()) }
         provide<MovieService> { MovieService() }
         provide<FavoriteService> { FavoriteService() }
     }
 }
+
+fun Application.configureDIVariables() {
+    dependencies {
+        provide("jwt.secret") { System.getenv("JWT_SECRET") }
+        provide("jwt.audience") { "authenticated" }
+    }
+}
+

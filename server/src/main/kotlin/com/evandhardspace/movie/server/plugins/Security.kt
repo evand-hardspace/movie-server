@@ -6,11 +6,12 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
+import io.ktor.server.plugins.di.dependencies
 import io.ktor.server.response.*
 
-fun Application.configureSecurity() {
-    val secret = environment.config.property("jwt.secret").getString()
-    val audience = environment.config.property("jwt.audience").getString()
+suspend fun Application.configureSecurity() {
+    val secret: String = dependencies.resolve("jwt.secret")
+    val audience: String = dependencies.resolve("jwt.audience")
 
     val verifier = JWT.require(Algorithm.HMAC256(secret))
         .withAudience(audience)
