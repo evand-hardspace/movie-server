@@ -6,3 +6,4 @@
 /.kotlin/
 .env
 /server/movies.db
+/movies.db
