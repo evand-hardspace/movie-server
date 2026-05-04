@@ -89,6 +89,10 @@ class MovieService {
         MoviesTable.deleteWhere { MoviesTable.id eq id } > 0
     }
 
+    fun hasMovies(): Boolean = transaction {
+        MoviesTable.selectAll().count() > 0
+    }
+
     private fun ResultRow.toMovie() = Movie(
         id = this[MoviesTable.id].value.toString(),
         title = this[MoviesTable.title],
