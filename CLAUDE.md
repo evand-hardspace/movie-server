@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Ktor backend for managing a movie catalogue. Features email/password auth via Supabase, movie CRUD with photo storage, genre-based filtering, favorites, and an admin role that gates write operations.
+Ktor backend for managing a movie catalogue. Features self-owned email/password auth (HMAC256 JWT), movie CRUD with photo storage, genre-based filtering, favorites, and an admin role that gates write operations. All data stored in SQLite.
 
 This project serves **educational purposes** as a simple Ktor backend for an Android application. The target audience is Android students learning how to build and connect a real backend.
 
@@ -14,11 +14,11 @@ This project serves **educational purposes** as a simple Ktor backend for an And
 |---|---|---|
 | Framework | Ktor 3.4.0 (Netty) | |
 | Language | Kotlin 2.3.20, JVM 21 | |
-| Auth | Supabase Auth (email/password) | Issues JWTs; Ktor validates them |
-| Database | Supabase PostgreSQL | Via JDBC + Exposed DSL |
-| ORM | JetBrains Exposed 1.2.0 | JDBC |
+| Auth | Self-owned (BCrypt + HMAC256 JWT) | Server issues and validates its own JWTs |
+| Database | SQLite (`org.xerial:sqlite-jdbc`) | File-based; path via `SQLITE_FILE` env var |
+| ORM | JetBrains Exposed 1.2.0 | JDBC; `SchemaUtils.create` on startup |
 | Storage | Supabase Storage | Client uploads directly; Ktor stores URL |
-| DI | Koin (`ktor-server-di`) | |
+| DI | Ktor `ktor-server-di` | |
 | Serialization | kotlinx.serialization | |
 | Hosting | Google Cloud Run | Dockerized fat JAR |
 | Build | Gradle Kotlin DSL | Version catalog in `gradle/libs.versions.toml` |
@@ -30,68 +30,47 @@ This project serves **educational purposes** as a simple Ktor backend for an And
 ```
 Client
   │
-  ├─ 1. Email/password → Supabase Auth → JWT
+  ├─ 1. POST /auth/register or /auth/login → receives JWT + refresh token
   ├─ 2. Upload photo → Supabase Storage (presigned URL) → receives photo_url
   │
   ▼
 Cloud Run (Ktor)
-  ├─ Validate Supabase JWT (JWKS endpoint)
-  ├─ Extract user ID + role claim
-  ├─ JDBC → Supabase PostgreSQL (Exposed DSL)
+  ├─ Validate HMAC256 JWT (JWT_SECRET)
+  ├─ Extract user ID + email from JWT claims
+  ├─ JDBC → SQLite (Exposed DSL)
   └─ Returns/persists photo_url (no binary traffic through Ktor)
 ```
 
 **Photo upload flow:** Client requests a presigned upload URL from Supabase Storage directly, uploads the file, then sends the resulting public `photo_url` to the Ktor API. Ktor never handles binary data.
 
+**SQLite persistence on Cloud Run:** Container storage is ephemeral — data resets on every redeploy. Mount a persistent volume at `SQLITE_FILE` for production. Use `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` env vars to auto-create a super_admin on first boot.
+
 ---
 
 ## Database Schema
 
-```sql
-CREATE TABLE users (
-    id         UUID PRIMARY KEY,  -- matches Supabase auth user ID
-    email      TEXT NOT NULL,
-    is_admin   BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+Managed by Exposed `SchemaUtils.create(...)` on startup (no external migrations needed).
 
-CREATE TYPE genre AS ENUM (
-    'ACTION', 'COMEDY', 'DRAMA', 'HORROR',
-    'THRILLER', 'ROMANCE', 'SCI_FI', 'DOCUMENTARY', 'ANIMATION'
-);
-
-CREATE TABLE movies (
-    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    title       TEXT NOT NULL,
-    description TEXT,
-    genre       genre NOT NULL,
-    rating      NUMERIC(3,1) CHECK (rating >= 0 AND rating <= 10),
-    photo_url   TEXT,
-    created_by  UUID NOT NULL REFERENCES users(id),
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_movies_genre ON movies(genre);
-
-CREATE TABLE user_favorites (
-    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    movie_id   UUID NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    PRIMARY KEY (user_id, movie_id)
-);
+```
+users          — id (UUID/TEXT), email, password_hash, role (TEXT enum), created_at (epoch ms)
+refresh_tokens — token (TEXT PK), user_id (FK), expires_at (epoch ms), is_revoked (bool)
+movies         — id (UUID/TEXT), title, description, genre (TEXT enum), rating, photo_url,
+                 created_by (FK), created_at (epoch ms), updated_at (epoch ms)
+user_favorites — user_id + movie_id (composite PK), created_at (epoch ms)
 ```
 
 ---
 
 ## API Design
 
-All endpoints return `application/json`. Auth header: `Authorization: Bearer <supabase-jwt>`.
+All endpoints return `application/json`. Auth header: `Authorization: Bearer <jwt>`.
 
 ### Auth
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/auth/sync` | Required | Upsert user record on first login |
+| `POST` | `/auth/register` | None | Create account; returns tokens |
+| `POST` | `/auth/login` | None | Sign in; returns tokens |
+| `POST` | `/auth/refresh` | None | Exchange refresh token for new access token |
 
 ### Movies
 | Method | Path | Auth | Description |
@@ -113,53 +92,45 @@ All endpoints return `application/json`. Auth header: `Authorization: Bearer <su
 |---|---|---|---|
 | `GET` | `/users/me` | Required | Current user's id, email, role |
 | `GET` | `/users` | super_admin | List all users with id, email, role |
+| `PUT` | `/users/{id}/role` | super_admin | Update a user's role |
 
-### Request/Response shapes
+### Key request/response shapes
 
-**POST /movies / PUT /movies/{id}**
+**POST /auth/register, POST /auth/login**
 ```json
-{
-  "title": "Inception",
-  "description": "A mind-bending thriller",
-  "genre": "THRILLER",
-  "rating": 8.8,
-  "photo_url": "https://<project>.supabase.co/storage/v1/object/public/movies/inception.jpg"
-}
+{ "email": "user@example.com", "password": "secret" }
+```
+Response:
+```json
+{ "access_token": "...", "refresh_token": "...", "token_type": "Bearer", "expires_in": 3600 }
+```
+
+**POST /auth/refresh**
+```json
+{ "refresh_token": "uuid-string" }
 ```
 
 **GET /movies response**
 ```json
-[
-  {
-    "id": "uuid",
-    "title": "Inception",
-    "description": "...",
-    "genre": "THRILLER",
-    "rating": 8.8,
-    "photo_url": "https://...",
-    "is_favorited": false,
-    "created_at": "2026-04-30T10:00:00Z"
-  }
-]
+[{ "id": "uuid", "title": "Inception", "genre": "THRILLER", "rating": 8.8, "is_favorited": false, "created_at": "..." }]
 ```
 
 ---
 
 ## Auth Flow
 
-1. Client signs in with email/password via Supabase Auth SDK
-2. Supabase issues a JWT containing `sub` (user UUID), `email`, and app_metadata
-3. Ktor validates the JWT using Supabase's JWKS endpoint:
-   `https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1/keys`
-4. On first login, client calls `POST /auth/sync` — Ktor upserts the user row
-5. Roles: `is_admin = true` in `users` table for admin; `super_admin` role for user management
+1. Client calls `POST /auth/register` or `POST /auth/login` with email + password
+2. Server verifies credentials (BCrypt), issues HMAC256 access JWT (1-hour TTL) + opaque refresh token (30-day TTL)
+3. Refresh token stored in `refresh_tokens` table; revoked on use (rotation)
+4. Subsequent requests carry `Authorization: Bearer <access_token>`
+5. Roles: `USER` (default), `ADMIN` (write access to movies), `SUPER_ADMIN` (user management)
+6. First-boot seed: set `SEED_ADMIN_EMAIL` + `SEED_ADMIN_PASSWORD` to auto-create a super_admin if no users exist
 
-**JWT validation config (application.yaml):**
+**JWT config (`application.yaml`):**
 ```yaml
 jwt:
-  issuer: "https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1"
+  secret: ${JWT_SECRET}
   audience: "authenticated"
-  jwksUri: "https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1/keys"
 ```
 
 ---
@@ -175,31 +146,21 @@ movie-server/
 │       ├── plugins/
 │       │   ├── Http.kt              # CORS, caching headers
 │       │   ├── Serialization.kt
-│       │   ├── Security.kt          # JWT validation via Supabase JWKS
-│       │   ├── DI.kt                # Koin modules
-│       │   └── Database.kt          # Exposed + PostgreSQL connection
+│       │   ├── Security.kt          # HMAC256 JWT validation
+│       │   ├── DI.kt                # Service wiring
+│       │   ├── Database.kt          # SQLite connection + SchemaUtils.create
+│       │   └── Seed.kt              # Optional super_admin seed on first boot
 │       ├── routes/
-│       │   ├── AuthRoutes.kt        # POST /auth/sync
+│       │   ├── AuthRoutes.kt        # POST /auth/register, /login, /refresh
 │       │   ├── MovieRoutes.kt       # GET+POST+PUT+DELETE /movies
 │       │   ├── FavoriteRoutes.kt    # POST+DELETE /movies/{id}/favorite
-│       │   └── UserRoutes.kt        # GET /users/me, GET /users
+│       │   └── UserRoutes.kt        # GET /users/me, GET /users, PUT /users/{id}/role
 │       ├── domain/
-│       │   ├── model/
-│       │   │   ├── Movie.kt
-│       │   │   ├── Genre.kt
-│       │   │   ├── User.kt
-│       │   │   └── UserRole.kt
-│       │   ├── table/
-│       │   │   ├── MoviesTable.kt
-│       │   │   ├── UsersTable.kt
-│       │   │   └── FavoritesTable.kt
-│       │   └── service/
-│       │       ├── MovieService.kt
-│       │       ├── UserService.kt
-│       │       ├── FavoriteService.kt
-│       │       └── AuthService.kt
+│       │   ├── model/               # Movie, Genre, User, UserRole
+│       │   ├── table/               # UsersTable, RefreshTokensTable, MoviesTable, FavoritesTable
+│       │   └── service/             # AuthService, UserService, MovieService, FavoriteService
 │       └── util/
-│           └── PrincipalExt.kt      # helpers to extract user/admin from ApplicationCall
+│           └── PrincipalExt.kt      # userId(), userEmail() helpers
 └── admin-panel/                     # KMP admin panel module (WASM + JVM targets)
     └── src/
         ├── commonMain/              # all UI + business logic
@@ -230,23 +191,23 @@ Separate KMP module (`admin-panel/`) targeting WASM and JVM. Architecture suppor
 
 ## Environment Variables
 
-| Variable | Description |
-|---|---|
-| `DATABASE_URL` | `jdbc:postgresql://db.hrecjmjmncoiydjopnzc.supabase.co:5432/postgres` |
-| `DATABASE_USER` | `postgres` |
-| `DATABASE_PASSWORD` | Supabase dashboard → Settings → Database |
-| `SUPABASE_JWT_ISSUER` | `https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1` |
-| `SUPABASE_JWKS_URI` | `https://hrecjmjmncoiydjopnzc.supabase.co/auth/v1/keys` |
-| `GCP_PROJECT_ID` | Google Cloud project ID — stored on device only, never committed |
+| Variable | Required | Description |
+|---|---|---|
+| `JWT_SECRET` | Yes | HMAC256 signing key (min 32 bytes) |
+| `SQLITE_FILE` | No | SQLite file path (default: `./movies.db`) |
+| `SEED_ADMIN_EMAIL` | No | Auto-create super_admin on first boot if set |
+| `SEED_ADMIN_PASSWORD` | No | Password for the seeded super_admin |
+| `GCP_PROJECT_ID` | Deploy | Google Cloud project ID — device only, never committed |
 
 ---
 
 ## Deployment
 
-- **Containerize:** `./gradlew buildFatJar` → `Dockerfile` FROM `eclipse-temurin:21-jre`
+- **Containerize:** `./gradlew :server:buildFatJar` → `Dockerfile` FROM `eclipse-temurin:21-jre`
 - **Registry:** Google Artifact Registry — `us-central1-docker.pkg.dev/$GCP_PROJECT_ID/movie-server`
-- **Deploy:** `gcloud run deploy movie-server --image us-central1-docker.pkg.dev/$GCP_PROJECT_ID/movie-server/movie-server:latest --region us-central1`
-- **CI:** GitHub Actions → build → push → deploy (`workflow_dispatch`)
+- **Deploy:** `gcloud run deploy movie-server --image ... --set-env-vars="JWT_SECRET=...,SQLITE_FILE=/data/movies.db"`
+- **CI:** GitHub Actions → test → build → push → deploy (`workflow_dispatch`)
+- **Persistence:** SQLite file is ephemeral on Cloud Run by default. Mount a volume at `SQLITE_FILE` for data persistence across deploys.
 
 ---
 
@@ -254,11 +215,13 @@ Separate KMP module (`admin-panel/`) targeting WASM and JVM. Architecture suppor
 
 | Decision | Choice | Reason |
 |---|---|---|
-| Auth provider | Supabase Auth (email/password) | Same vendor as DB; handles auth flow + JWT issuance |
+| Auth | Self-owned BCrypt + HMAC256 JWT | No external dependency; full ownership of auth stack |
+| Token storage | SQLite refresh_tokens table (opaque, rotated) | Simple revocation; no Redis needed |
+| Database | SQLite | Zero-config, self-contained, no external service |
 | Photo upload | Client → Supabase Storage directly | Keeps Ktor stateless; no binary traffic |
-| Genre | Kotlin enum + PostgreSQL ENUM | Fixed set; type-safe filtering |
-| DB access | Exposed DSL over JDBC | Idiomatic Kotlin; sync JDBC simpler than R2DBC |
+| Genre / Role | Kotlin enum stored as TEXT | SQLite has no native enum type |
+| Timestamps | epoch ms (long) | Avoids JDBC dialect differences for date types |
+| DB access | Exposed DSL over JDBC | Idiomatic Kotlin; sync JDBC simple for this scale |
 | Rating scale | 0.0–10.0 NUMERIC(3,1) | Industry standard range |
-| Admin grant | Manual via Supabase dashboard (`is_admin` flag) | Simple for MVP; no promotion endpoint needed |
-| Hosting | Cloud Run | Scales to zero; no cluster ops; fits containerized Ktor |
+| Hosting | Cloud Run | Scales to zero; no cluster ops |
 | Admin panel | KMP WASM module in same repo | Reuses domain models; single deploy artifact |

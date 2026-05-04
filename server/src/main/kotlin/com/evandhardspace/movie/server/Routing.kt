@@ -20,7 +20,7 @@ fun Application.configureRouting() {
     val favoriteService: FavoriteService by dependencies
     routing {
         swaggerUI(path = "swagger", swaggerFile = "openapi/documentation.yaml")
-        authRoutes(authService, userService)
+        authRoutes(authService)
         movieRoutes(movieService, userService, favoriteService)
         favoriteRoutes(favoriteService)
         userRoutes(userService)

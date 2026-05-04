@@ -4,3 +4,4 @@
 /.mcp.json
 /server/build/
 /.kotlin/
+.env
