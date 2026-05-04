@@ -1,8 +1,10 @@
 package com.evandhardspace.movie.server.routes
 
 import com.evandhardspace.movie.server.domain.model.Genre
+import com.evandhardspace.movie.server.domain.model.Movie
 import com.evandhardspace.movie.server.domain.service.FavoriteService
 import com.evandhardspace.movie.server.domain.service.MovieService
+import com.evandhardspace.movie.server.domain.service.PagedMovies
 import com.evandhardspace.movie.server.domain.service.UserService
 import com.evandhardspace.movie.server.util.userId
 import io.ktor.http.*
@@ -24,6 +26,18 @@ data class MovieRequest(
     @SerialName("photo_url") val photoUrl: String? = null,
 )
 
+@Serializable
+data class PagedMoviesResponse(
+    val items: List<Movie>,
+    val page: Int,
+    @SerialName("page_size") val pageSize: Int,
+    val total: Long,
+    @SerialName("total_pages") val totalPages: Int,
+)
+
+private fun PagedMovies.toResponse(items: List<Movie> = this.items) =
+    PagedMoviesResponse(items, page, pageSize, total, totalPages)
+
 fun Route.movieRoutes(movieService: MovieService, userService: UserService, favoriteService: FavoriteService) {
     authenticate("auth-jwt", optional = true) {
         get("/movies") {
@@ -33,13 +47,26 @@ fun Route.movieRoutes(movieService: MovieService, userService: UserService, favo
                     return@get call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid genre: $genreParam"))
                 }
             } else null
-            val movies = movieService.getMovies(genre)
             val principal = call.principal<JWTPrincipal>()
-            if (principal != null) {
-                val favIds = favoriteService.getFavoritedMovieIds(principal.userId())
-                call.respond(movies.map { it.copy(isFavorited = UUID.fromString(it.id) in favIds) })
+            val pageParam = call.request.queryParameters["page"]?.toIntOrNull()
+            if (pageParam != null) {
+                val pageSize = call.request.queryParameters["page_size"]?.toIntOrNull()?.coerceIn(1, 100) ?: 20
+                val page = pageParam.coerceAtLeast(1)
+                val paged = movieService.getMoviesPaged(genre, page, pageSize)
+                if (principal != null) {
+                    val favIds = favoriteService.getFavoritedMovieIds(principal.userId())
+                    call.respond(paged.toResponse(paged.items.map { it.copy(isFavorited = UUID.fromString(it.id) in favIds) }))
+                } else {
+                    call.respond(paged.toResponse())
+                }
             } else {
-                call.respond(movies)
+                val movies = movieService.getMovies(genre)
+                if (principal != null) {
+                    val favIds = favoriteService.getFavoritedMovieIds(principal.userId())
+                    call.respond(movies.map { it.copy(isFavorited = UUID.fromString(it.id) in favIds) })
+                } else {
+                    call.respond(movies)
+                }
             }
         }
 

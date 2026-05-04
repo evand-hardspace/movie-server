@@ -5,6 +5,7 @@ import com.evandhardspace.movie.server.routes.UserResponse
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.builtins.ListSerializer
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -256,6 +257,116 @@ class FullFlowIntegrationTest {
 
     // endregion
 
+    // region Paginated movies
+
+    @Test
+    fun `GET movies with page param on empty db returns empty PagedMoviesResponse`() = integrationTest {
+        val response = client.get("/movies?page=1")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val paged = testJson.decodeFromString<PagedMoviesPayload>(response.bodyAsText())
+        assertEquals(1, paged.page)
+        assertEquals(20, paged.pageSize)
+        assertEquals(0L, paged.total)
+        assertEquals(1, paged.totalPages)
+        assertTrue(paged.items.isEmpty())
+    }
+
+    @Test
+    fun `GET movies paginated returns correct totals and page`() = integrationTest {
+        val auth = bearerHeader(adminAuth())
+
+        repeat(3) { i ->
+            client.post("/movies") {
+                header(HttpHeaders.Authorization, auth)
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Movie $i","genre":"ACTION"}""")
+            }
+        }
+
+        val response = client.get("/movies?page=1&page_size=2")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val paged = testJson.decodeFromString<PagedMoviesPayload>(response.bodyAsText())
+        assertEquals(1, paged.page)
+        assertEquals(2, paged.pageSize)
+        assertEquals(3L, paged.total)
+        assertEquals(2, paged.totalPages)
+        assertEquals(2, paged.items.size)
+    }
+
+    @Test
+    fun `GET movies page 2 returns remaining items`() = integrationTest {
+        val auth = bearerHeader(adminAuth())
+
+        repeat(3) { i ->
+            client.post("/movies") {
+                header(HttpHeaders.Authorization, auth)
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Movie $i","genre":"ACTION"}""")
+            }
+        }
+
+        val response = client.get("/movies?page=2&page_size=2")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val paged = testJson.decodeFromString<PagedMoviesPayload>(response.bodyAsText())
+        assertEquals(2, paged.page)
+        assertEquals(1, paged.items.size)
+    }
+
+    @Test
+    fun `GET movies paginated with genre filter returns only matching movies`() = integrationTest {
+        val auth = bearerHeader(adminAuth())
+
+        client.post("/movies") {
+            header(HttpHeaders.Authorization, auth)
+            contentType(ContentType.Application.Json)
+            setBody("""{"title":"Action Movie","genre":"ACTION"}""")
+        }
+        client.post("/movies") {
+            header(HttpHeaders.Authorization, auth)
+            contentType(ContentType.Application.Json)
+            setBody("""{"title":"Drama Movie","genre":"DRAMA"}""")
+        }
+
+        val response = client.get("/movies?page=1&genre=ACTION")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val paged = testJson.decodeFromString<PagedMoviesPayload>(response.bodyAsText())
+        assertEquals(1L, paged.total)
+        assertEquals(1, paged.items.size)
+        assertTrue(paged.items.first().title.contains("Action"))
+    }
+
+    @Test
+    fun `GET movies paginated enriches is_favorited when authenticated`() = integrationTest {
+        val auth = bearerHeader(adminAuth())
+        val created = testJson.decodeFromString<MoviePayload>(
+            client.post("/movies") {
+                header(HttpHeaders.Authorization, auth)
+                contentType(ContentType.Application.Json)
+                setBody("""{"title":"Dune","genre":"SCI_FI"}""")
+            }.bodyAsText()
+        )
+
+        val userTokens = client.registerAndGetTokens("user@example.com")
+        val userAuth = bearerHeader(userTokens.accessToken)
+
+        client.post("/movies/${created.id}/favorite") {
+            header(HttpHeaders.Authorization, userAuth)
+        }
+
+        val response = client.get("/movies?page=1") {
+            header(HttpHeaders.Authorization, userAuth)
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"is_favorited\":true"))
+    }
+
+    // endregion
+
     // region Favorites
 
     @Test
@@ -386,9 +497,17 @@ class FullFlowIntegrationTest {
     // endregion
 }
 
-// Minimal helper DTO for parsing movie responses without pulling in the full Movie model
 @kotlinx.serialization.Serializable
 private data class MoviePayload(
     val id: String,
     val title: String,
+)
+
+@kotlinx.serialization.Serializable
+private data class PagedMoviesPayload(
+    val items: List<MoviePayload>,
+    val page: Int,
+    @SerialName("page_size") val pageSize: Int,
+    val total: Long,
+    @SerialName("total_pages") val totalPages: Int,
 )

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -19,11 +20,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -34,27 +38,58 @@ import com.evandhardspace.movie.adminpanel.data.ApiResult
 import com.evandhardspace.movie.adminpanel.domain.model.Movie
 import kotlinx.coroutines.launch
 
+private const val PAGE_SIZE = 20
+
 @Composable
 fun MovieListScreen(appState: AppState) {
     var movies by remember { mutableStateOf<List<Movie>>(emptyList()) }
+    var currentPage by remember { mutableIntStateOf(0) }
+    var totalPages by remember { mutableIntStateOf(1) }
     var isLoading by remember { mutableStateOf(true) }
+    var isLoadingMore by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
 
-    fun loadMovies() {
+    fun loadPage(page: Int) {
         coroutineScope.launch {
-            isLoading = true
-            errorMessage = null
-            when (val result = appState.movieRepository.getMovies()) {
-                is ApiResult.Success -> movies = result.data
+            if (page == 1) {
+                isLoading = true
+                errorMessage = null
+            } else {
+                isLoadingMore = true
+            }
+            when (val result = appState.movieRepository.getMoviesPaged(page, PAGE_SIZE)) {
+                is ApiResult.Success -> {
+                    movies = if (page == 1) result.data.items else movies + result.data.items
+                    currentPage = result.data.page
+                    totalPages = result.data.totalPages
+                }
                 is ApiResult.Unauthorized -> appState.onUnauthorized()
                 is ApiResult.Error -> errorMessage = result.message
             }
             isLoading = false
+            isLoadingMore = false
         }
     }
 
-    LaunchedEffect(Unit) { loadMovies() }
+    LaunchedEffect(Unit) { loadPage(1) }
+
+    val reachedEnd by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: return@derivedStateOf false
+            lastVisible >= info.totalItemsCount - 3
+        }
+    }
+
+    LaunchedEffect(reachedEnd) {
+        snapshotFlow { reachedEnd }.collect { near ->
+            if (near && !isLoadingMore && !isLoading && currentPage < totalPages) {
+                loadPage(currentPage + 1)
+            }
+        }
+    }
 
     Scaffold(
         floatingActionButton = {
@@ -72,10 +107,10 @@ fun MovieListScreen(appState: AppState) {
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(errorMessage!!, color = MaterialTheme.colorScheme.error)
-                    Button(onClick = ::loadMovies) { Text("Retry") }
+                    Button(onClick = { loadPage(1) }) { Text("Retry") }
                 }
                 movies.isEmpty() -> Text("No movies yet", modifier = Modifier.align(Alignment.Center))
-                else -> LazyColumn(Modifier.fillMaxSize()) {
+                else -> LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
                     items(movies) { movie ->
                         MovieListItem(
                             movie = movie,
@@ -90,6 +125,13 @@ fun MovieListScreen(appState: AppState) {
                                 }
                             },
                         )
+                    }
+                    if (isLoadingMore) {
+                        item {
+                            Box(Modifier.fillMaxWidth().padding(16.dp)) {
+                                CircularProgressIndicator(Modifier.align(Alignment.Center))
+                            }
+                        }
                     }
                 }
             }

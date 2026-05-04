@@ -5,6 +5,7 @@ import com.evandhardspace.movie.server.createTestToken
 import com.evandhardspace.movie.server.domain.model.Genre
 import com.evandhardspace.movie.server.domain.service.FavoriteService
 import com.evandhardspace.movie.server.domain.service.MovieService
+import com.evandhardspace.movie.server.domain.service.PagedMovies
 import com.evandhardspace.movie.server.domain.service.UserService
 import com.evandhardspace.movie.server.testMovie
 import io.ktor.client.request.*
@@ -161,6 +162,57 @@ class MovieRoutesTest {
 
     // endregion
 
+    // region DELETE /movies/{id}
+
+    @Test
+    fun `DELETE movies without JWT returns 401`() = routeTest {
+        val response = client.delete("/movies/${UUID.randomUUID()}")
+        assertEquals(HttpStatusCode.Unauthorized, response.status)
+    }
+
+    @Test
+    fun `DELETE movies with non-admin user returns 403`() = routeTest {
+        val userId = UUID.randomUUID()
+        val movieId = UUID.randomUUID()
+        every { userService.isAdmin(userId) } returns false
+
+        val response = client.delete("/movies/$movieId") {
+            header(HttpHeaders.Authorization, "Bearer ${createTestToken(userId)}")
+        }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+    }
+
+    @Test
+    fun `DELETE movies with admin returns 204`() = routeTest {
+        val userId = UUID.randomUUID()
+        val movieId = UUID.randomUUID()
+        every { userService.isAdmin(userId) } returns true
+        every { movieService.deleteMovie(movieId) } returns true
+
+        val response = client.delete("/movies/$movieId") {
+            header(HttpHeaders.Authorization, "Bearer ${createTestToken(userId)}")
+        }
+
+        assertEquals(HttpStatusCode.NoContent, response.status)
+    }
+
+    @Test
+    fun `DELETE movies with admin for missing movie returns 404`() = routeTest {
+        val userId = UUID.randomUUID()
+        val movieId = UUID.randomUUID()
+        every { userService.isAdmin(userId) } returns true
+        every { movieService.deleteMovie(movieId) } returns false
+
+        val response = client.delete("/movies/$movieId") {
+            header(HttpHeaders.Authorization, "Bearer ${createTestToken(userId)}")
+        }
+
+        assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    // endregion
+
     // region PUT /movies/{id}
 
     @Test
@@ -218,6 +270,68 @@ class MovieRoutesTest {
         }
 
         assertEquals(HttpStatusCode.NotFound, response.status)
+    }
+
+    // endregion
+
+    // region GET /movies paginated
+
+    private fun pagedResult(vararg movies: java.util.UUID, page: Int = 1, pageSize: Int = 20) = PagedMovies(
+        items = movies.map { testMovie(it) },
+        page = page,
+        pageSize = pageSize,
+        total = movies.size.toLong(),
+        totalPages = 1,
+    )
+
+    @Test
+    fun `GET movies with page param returns PagedMoviesResponse`() = routeTest {
+        val movieId = UUID.randomUUID()
+        every { movieService.getMoviesPaged(null, 1, 20) } returns pagedResult(movieId)
+
+        val response = client.get("/movies?page=1")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        val body = response.bodyAsText()
+        assertTrue(body.contains("\"page\":1"))
+        assertTrue(body.contains("\"total\":1"))
+        assertTrue(body.contains("\"total_pages\":1"))
+        verify { movieService.getMoviesPaged(null, 1, 20) }
+    }
+
+    @Test
+    fun `GET movies paginated with genre filter passes genre to service`() = routeTest {
+        every { movieService.getMoviesPaged(Genre.ACTION, 1, 20) } returns pagedResult(UUID.randomUUID())
+
+        val response = client.get("/movies?page=1&genre=ACTION")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        verify { movieService.getMoviesPaged(Genre.ACTION, 1, 20) }
+    }
+
+    @Test
+    fun `GET movies paginated respects page_size param`() = routeTest {
+        every { movieService.getMoviesPaged(null, 1, 5) } returns pagedResult(UUID.randomUUID(), pageSize = 5)
+
+        val response = client.get("/movies?page=1&page_size=5")
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        verify { movieService.getMoviesPaged(null, 1, 5) }
+    }
+
+    @Test
+    fun `GET movies paginated with JWT enriches is_favorited`() = routeTest {
+        val userId = UUID.randomUUID()
+        val movieId = UUID.randomUUID()
+        every { movieService.getMoviesPaged(null, 1, 20) } returns pagedResult(movieId)
+        every { favoriteService.getFavoritedMovieIds(userId) } returns setOf(movieId)
+
+        val response = client.get("/movies?page=1") {
+            header(HttpHeaders.Authorization, "Bearer ${createTestToken(userId)}")
+        }
+
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertTrue(response.bodyAsText().contains("\"is_favorited\":true"))
     }
 
     // endregion

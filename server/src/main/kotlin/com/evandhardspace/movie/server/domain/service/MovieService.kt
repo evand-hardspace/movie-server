@@ -93,6 +93,23 @@ class MovieService {
         MoviesTable.selectAll().count() > 0
     }
 
+    fun getMoviesPaged(genre: Genre?, page: Int, pageSize: Int): PagedMovies = transaction {
+        val base = MoviesTable.selectAll()
+            .let { if (genre != null) it.where { MoviesTable.genre eq genre } else it }
+        val total = base.count()
+        val items = base
+            .limit(pageSize)
+            .offset((page - 1).toLong() * pageSize)
+            .map { it.toMovie() }
+        PagedMovies(
+            items = items,
+            page = page,
+            pageSize = pageSize,
+            total = total,
+            totalPages = ((total + pageSize - 1) / pageSize).toInt().coerceAtLeast(1),
+        )
+    }
+
     private fun ResultRow.toMovie() = Movie(
         id = this[MoviesTable.id].value.toString(),
         title = this[MoviesTable.title],
@@ -103,3 +120,11 @@ class MovieService {
         createdAt = Instant.fromEpochMilliseconds(this[MoviesTable.createdAt]),
     )
 }
+
+data class PagedMovies(
+    val items: List<Movie>,
+    val page: Int,
+    val pageSize: Int,
+    val total: Long,
+    val totalPages: Int,
+)
